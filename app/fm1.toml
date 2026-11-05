@@ -1,0 +1,20 @@
+# GNOMNOM's build settings (fm1-base's tools/build.py: ../build.sh gnomnom)
+name = "gnomnom"               # the build's files: gnomnom.fwsc, gnomnom-X.Y.fwsc
+id_prefix = "FM-1_15"          # package identity (each firmware its own): dev FM-1_1500, releases FM-1_15XXYYZZ.
+                               # Check the Firmware Hub catalogue for a clash before the first public release.
+usb_manufacturer = "Gnomnom"
+usb_product = "GNOMNOM FM-1"
+include = ["engine"]
+o2 = ["engine/band.c", "engine/fx.c"]   # the band and the effects: their own units at -O2
+gen = ["tools/gen_art.py {gen}/gn_art.h {gen}/art.png"]   # the pixel art and the palette, from the script's text
+words = "words.tsv"
+ble = true                     # Bluetooth MIDI with a computer, phone or tablet (JieLi's stack; --no-ble builds without it)
+ble_central = true             # and the FM-1 connects to Bluetooth MIDI keyboards and controllers too
+cpu2 = true                    # the second core renders the hall a block behind (plat_cpu2_*)
+cpu2_fallback = true           # if it misreads or is late: one core until power-off, no restart
+usb_audio_in = true            # the master output recordable over USB
+usb_audio_out = false
+# the site (tools/make_site.py)
+tagline = "a gnome eats mushrooms and plays the tune: a rhythm game for the FM-1"
+licence = "MPL-2.0"
+credits = "Built on fm1-base and felucca-bsp, from Felucca by Leo Kuroshita (Hügelton Instruments)."

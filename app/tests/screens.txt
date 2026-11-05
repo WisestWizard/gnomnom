@@ -1,0 +1,38 @@
+# The manual's screenshots (gnomnom/docs/img): ./build.sh gnomnom --host, then
+#   gnomnom/build/host/gnomnom_host gnomnom/tests/screens.txt gnomnom/docs/img
+wait 700
+shot screen-title.png
+# stage 1 in its TUNE, the autoplayer eating (88 BPM: the two-bar INTRO is 5455 ms)
+tap PLAY
+gn auto 999
+wait 9000
+shot screen-play.png
+tap PLAY
+wait 200
+shot screen-paused.png
+tap HOME
+wait 200
+# stage 4, RED SPOTS (128 BPM: the four-bar INTRO is 7500 ms), and stage 7, SPIRAL EYES (146 BPM: 6575 ms), each a
+# few seconds into its TUNE
+gn stage 4
+tap PLAY
+gn auto 999
+wait 11000
+shot screen-stage4.png
+tap HOME
+tap HOME
+wait 200
+gn stage 7
+tap PLAY
+gn auto 999
+wait 10000
+shot screen-stage7.png
+tap HOME
+tap HOME
+wait 200
+# the end: stage 1 with nothing eaten until the trip runs out (14 misses from 400 at 30 each)
+gn stage 1
+tap PLAY
+gn autooff
+wait 14000
+shot screen-over.png

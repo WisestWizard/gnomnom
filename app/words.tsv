@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: MPL-2.0
+# GNOMNOM's words for a screen reader (fm1-reader): the text on the screen <TAB> what to say.
+# url: https://gnomnom.invalid/words/
+GNOMNOM	nom nom
+PRESS PLAY	press play
+HIGH SCORE	high score
+NEW HIGH SCORE	new high score
+STAGE	stage
+JAM	jam mode
+ON	on
+OFF	off
+DEMO	demo
+SCORE	score
+TRIP	trip
+COMBO	combo
+PAUSED	paused
+YOU CAME DOWN	you came down
+PLAY AGAIN	play again
+FOREST FLOOR	forest floor
+SPORE DRIFT	spore drift
+CAP OPENING	cap opening
+RED SPOTS	red spots
+THE WAVY BIT	the wavy bit
+KALEIDOSCOPE	kaleidoscope
+SPIRAL EYES	spiral eyes
+ENLIGHTENMENT	enlightenment
+PERFECT	perfect
+GOOD	good
+MISS	miss
+POISON	poison
+CHAIN	chain
+BOSS	boss
+THE BIG ONE	the big one
+CLEAR	stage clear
+ENDLESS	endless
+CHORD	chord
+ECHO	echo
+SLOW	slow
+WIDE	wide
+FREEZE	freeze
+SHIMMER	shimmer
+BURP	burp
+TONE	tone
+SPACE	space
+VOICE	voice
+HAT	hat colour
+PLUCK	pluck
+SAW	saw
+SQUARE	square
+BELL	bell
+BLUETOOTH	bluetooth
+SAVED	saved
+SAVE FAILED	save failed
+BLE	bluetooth
+DEV	device
+PRACTICE	practice, no high score
+FLASH	flash
+WAIT	wait
+CHOMP!	chomp
+WOBBLE	wobble
+CPU	C P U
+EATEN	eaten
+MISSED	missed
+BEST COMBO	best combo
+RESUME	resume
+QUIT	quit
+TITLE	title
+A GNOME EATS MUSHROOMS	a gnome eats mushrooms
+AUTO	the stage's own
+BUTTON	button
+SEL	select
+EDIT	edit
+HOME	home
+SAVE	save
+PLAY	play
+SELECT	select
+PRESET	preset
+K1	knob 1
+K2	knob 2
+K3	knob 3
+K4	knob 4
+SCANNING	scanning
+DEVICE	device
+CONNECTING	connecting
+CONNECTED	connected
+NO ANSWER	no answer
+DEVICE LOST	device lost
+DISCONNECTED	disconnected
+NO DEVICE	no device
+COMPUTER	computer
+COMPUTER GONE	computer gone
+PLAY RESUME	play resumes
+HOME QUIT	home quits
+HOME TITLE	home, the title
+SEL JAM	select, jam mode
+OCT STAGE	octave buttons, the stage
+EDIT FLASH	edit, flash
+ALGO	algorithm
+S1	stage 1
+S2	stage 2
+S3	stage 3
+S4	stage 4
+S5	stage 5
+S6	stage 6
+S7	stage 7
+S8	stage 8
+S8+	endless

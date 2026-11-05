@@ -1,0 +1,107 @@
+# GNOMNOM in the host simulator: ./build.sh gnomnom --host, then
+#   gnomnom/build/host/gnomnom_host gnomnom/tests/basic.txt gnomnom/build/host
+# Stage 1 (index 0) is 88 BPM: a beat is 682 ms, a bar 2727 ms, the two-bar INTRO 5455 ms; the run's seed is fixed,
+# so every number below comes out the same each run. The whole script is about 100 s of simulated time.
+wait 700
+expect state 0
+expect dirty 0
+expect hiscore 0
+expect furthest 0
+shot title.png
+# a white key on the title plays its lane's note on LEAD as air (key 7 is C4: lane C, register 0, note 60 at 60)
+tapkey 7
+wait 100
+expect air 1
+expect_out USB 90 3C 3C
+out
+# PLAY: a run from stage 1, its INTRO at 88 BPM, nothing stashed
+tap PLAY
+wait 100
+expect state 2
+expect section 1
+expect stage 0
+expect bpm 88
+expect practice 0
+expect jam 0
+expect trip 400
+expect stash0 0
+# through the INTRO into the TUNE: mushrooms are falling (the first spawned two beats before TUNE's first beat)
+# the autoplayer eats every mushroom at its hit tick, PERFECT: the score and the trip climb, the combo holds,
+# and the limiter keeps the output under -0.5 dBFS
+peakreset
+gn auto 999
+wait 5600
+expect section 2
+expect mush >0
+shot play.png
+wait 5400
+expect eaten >7
+expect perfect >7
+expect combo >7
+expect missed 0
+expect trip >400
+expect score >100
+expect peak_db_max -0.3
+shot eating.png
+# a deliberate miss: the autoplayer off, the next mushrooms fall past the mouth: the combo ends
+gn autooff
+wait 3000
+expect missed >0
+expect combo 0
+expect nexthit >-1
+# PLAY pauses; PLAY again resumes with a four-beat count-in (4 clicks at 88 BPM: 2727 ms)
+tap PLAY
+wait 100
+expect state 3
+shot paused.png
+tap PLAY
+wait 100
+expect countin 4
+wait 2900
+expect countin 0
+expect state 2
+# the trip runs out with nothing eaten (a miss costs 30 at stage 1): YOU CAME DOWN, and the settings (the high
+# score) are saved in the silence before the march
+wait 20000
+expect state 4
+shot over.png
+expect dirty 0
+expect store_writes >0
+expect hiscore >0
+# a reboot keeps the high score
+reboot
+wait 700
+expect state 0
+expect hiscore >0
+expect furthest 0
+# JAM: SEL on the title; PLAY saves the dirty setting first; with nothing eaten for a minute the meter refills
+# with a WOBBLE instead of ending the run
+tap SEL
+wait 50
+expect dirty 1
+tap PLAY
+wait 1000
+expect state 2
+expect jam 1
+expect dirty 0
+gn autooff
+wait 60000
+expect state 2
+expect trip >0
+expect missed >20
+# the knobs: K4 the hat (saved), K3 the LEAD voice; a screen reader asks where it is and hears the score
+turn K4 3
+expect hat 3
+expect dirty 1
+turn K3 1
+listen
+where
+said SCORE
+# HOME pauses; HOME again ends the run to the title, saving on the way
+tap HOME
+wait 100
+expect state 3
+tap HOME
+wait 200
+expect state 0
+expect dirty 0
