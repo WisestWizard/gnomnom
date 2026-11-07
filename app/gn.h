@@ -63,6 +63,8 @@ enum { AB_NONE, AB_ARP, AB_CHORD, AB_ECHO, AB_SLOW, AB_WIDE, AB_FREEZE, AB_SHIMM
 /* bars each lasts: SLOW's are bars of the slowed clock (4 real bars); FREEZE's is real time at the tempo it froze
  * at; BURP is instant */
 #define GN_ABILITY_BARS {0, 4, 8, 8, 2, 8, 1, 8, 0}
+/* the stash is three fixed slots, one a black key (F#3 G#3 A#3): a pickup fills the lowest empty one, a full stash
+ * gives up its oldest pickup in place, using one leaves its slot empty; the others never move */
 
 /* ---- states and sections */
 enum { GS_TITLE, GS_ATTRACT, GS_PLAY, GS_PAUSE, GS_OVER, GS_COUNT };
@@ -71,6 +73,11 @@ enum { SEC_TITLE, SEC_INTRO, SEC_TUNE, SEC_BOSS, SEC_CLEAR, SEC_OVER, SEC_COUNT 
 enum { Q_NONE, Q_GOOD, Q_PERFECT };    /* an eat's timing */
 #define GN_WIN_PERFECT_MS 45u
 #define GN_WIN_GOOD_MS 110u
+/* a clam: a lane key (or a MIDI note on a lane) that eats nothing while a melody mushroom in another lane is inside
+ * its GOOD window, or within GN_WIN_GOOD_MS of the hit of one a key just ate in another lane (a slap of every key):
+ * a sour note (BN_SOUR | BN_SOFT, vel 80) for the air note, the combo ends, a third of the stage's miss_trip, GE_CLAM.
+ * Never under FREEZE, never for CHORD's or WIDE's extra lanes, the air keys F3..B3 or the black keys; a press with
+ * nothing due anywhere stays free air */
 #define GN_BOSS_CHORD_MS 90u             /* the three keys within this of each other */
 #define GN_VIS_LEAD_MS 30u               /* the snapshot's positions run this far ahead of the song: the frame and
                                           * the panel are that late, so the eye and the ear agree */
@@ -125,7 +132,8 @@ typedef struct {
     uint8_t density;                     /* the mushroom grid in 16ths: 1 every melody note, 2 only onsets on the
                                           * 8th grid, 4 only onsets on a beat; the rest are GN_SPAWN_AUTO notes */
     uint16_t min_gap_ms;                 /* a melody note closer than this to the previous mushroom (any lane), or
-                                          * than 1.5x this to the previous one in its lane, is an AUTO note too */
+                                          * than 1.5x this to the previous one in its lane, is an AUTO note too;
+                                          * over TUNE's first two bars the gap is 1.5x this, the next two 1.25x */
     uint8_t intro_bars;                  /* 2 or 4 */
     uint8_t guide;                       /* 1: a quiet LEAD plays every melody note at its hit whether eaten or not */
     uint8_t miss_trip, poison_trip;      /* what a miss and a death cap cost */
@@ -157,6 +165,7 @@ enum {
     BP_ENS, BP_ENS_MIX, BP_DLY_SEND, BP_DLY_DIV, BP_DLY_FDBK, BP_REV_SEND, BP_REV_SIZE, BP_REV_DAMP, BP_SHIMMER,
     BP_FREEZE,
     BP_CRUSH, BP_RING, BP_RING_HZ, BP_FILTER, BP_PITCH, BP_TEMPO, BP_SPACE,   /* SPACE: K2's offset, -1..1 */
+    BP_TRIP,                             /* the trip meter's pull on the band, -1..1, game.c's each block */
     BP_COUNT
 };
 /* units: 0..1 unless said. BP_LEAD_PATCH LP_*; BP_BASS_STYLE BS_*; BP_STAB_STYLE SS_*; BP_KIT KIT_*; BP_ENS ENS_*;
@@ -165,9 +174,14 @@ enum {
  * BP_RING_HZ in Hz (music.c sets it to 1.5 x the bar's chord root each bar); BP_FILTER -1 (a low-pass closing
  * to 150 Hz) .. 0 .. 1 (a high-pass opening to 4 kHz); BP_PITCH semitones, on LEAD, STAB and BASS (a bass note
  * under MIDI 33 after the shift is folded up an octave), never the drums (SLOW lengthens their decays x1.5
- * instead when BP_PITCH <= -6); BP_TEMPO bpm; BP_FREEZE 0/1. Every change smooths over 20 ms, BP_PITCH over 100 */
+ * instead when BP_PITCH <= -6); BP_TEMPO bpm; BP_FREEZE 0/1; BP_TRIP -1..1: 0 from trip 400 to 700, -1 at 100 and below, 1 at 900 and above
+ * (game.c slews it over about 0.8 s): under 0 a two-pole low-pass on BAND-WET (after the stutter, before LEAD
+ * joins) closes from 20 kHz toward 700 Hz and music.c drops the hats and shaker from -0.5, the stabs from -0.8
+ * (each decided at a bar line); over 0 the delay and hall sends rise by up to 0.08 and the shimmer by 0.12. LEAD,
+ * BASS and the kick never change with it. Every change smooths over 20 ms, BP_PITCH over 100 */
 /* the arena: fx_bytes() ~155.8 KB (ensemble, tape delay, hall, shimmer window), the stutter ring 12288 mono
- * int16 frames (24 KB: a 1/8 note down to 107 BPM), hall in/out 4 x 1 KB and mix buffers on their own 32-byte
+ * int16 frames (24 KB: a 1/8 note down to 109 BPM; slower, the slice halves and the repeats double), hall in/out
+ * 4 x 1 KB and mix buffers on their own 32-byte
  * lines, the voices' state; the oscillators compute their waves (fastmath.h), no tables */
 #define BAND_ARENA_BYTES (216u * 1024u)
 int band_init(void *arena, uint32_t bytes);   /* 0 ok; -1 too small: it then renders silence */
@@ -193,8 +207,8 @@ float band_get(uint32_t p);
  * whole cache lines with nothing else on them. Each block: copy the live params to the job copy; plat_cpu2_sync();
  * on_two = FM1B_CPU2 && plat_cpu2_on() && plat_cpu2_run(job, 0) == 1; render the voices, drums, stutter, crush,
  * ring, fx_pre into the wet bus; if (!on_two) fx_hall(hall_in, hall_out) here, else if (plat_cpu2_wait() != 0) zero
- * hall_out (this block's wet is lost, as DEEP FIELD accepts), else plat_cpu2_sync(); then wet += hall_out, copy
- * the wet bus to hall_in, fx_post. job() reads only hall_in and the job copy (handed over as its argument) and
+ * hall_out (this block's wet is lost, as DEEP FIELD accepts), else plat_cpu2_sync(); then copy the wet bus to
+ * hall_in (the next block's hall input), wet += hall_out, fx_post. job() reads only hall_in and the job copy (handed over as its argument) and
  * writes only hall_out and the hall's own state (fx.c's lines, on their own cache lines), calls
  * nothing of plat_*; the main core touches hall_in and hall_out only between wait and the next run. On the host
  * the job runs inline inside plat_cpu2_run, before this core's share, so job() needs nothing this core writes
@@ -241,7 +255,7 @@ void music_rate(float r);                     /* 1 normal, 0.5 SLOW: ticks per s
                                                * BP_PITCH and BP_FILTER are game.c's to set, not music_rate's */
 void music_hold(uint32_t reason, int on);     /* the transport stands while any HOLD_* is on: music_tick returns at
                                                * once (no steps, no spawns, music_now unchanged); FC is sent when the
-                                               * first reason goes on, FA when the last lifts. band_render keeps
+                                               * first reason goes on, FB (continue) when the last lifts. band_render keeps
                                                * running (tails ring); HOLD_FREEZE also band_set(BP_FREEZE, 1) and
                                                * band_stutter(8, 8) so the music never stops; HOLD_PAUSE does not */
 void music_arp(int on);                       /* ARP: on every 16th that has no melody note, LEAD plays the next tone
@@ -260,7 +274,7 @@ uint32_t music_stash_pick(void);              /* the next stashable's AB_* (firs
 #define GN_SPAWN_AUTO 1u                      /* an AUTO note: no mushroom; at its hit tick game.c plays
                                                * band_note_on(PART_LEAD, note, 100, BN_NOTEOFF_SELF) if the previous
                                                * melody note of the tune (any lane) was eaten, else stays silent. It
-                                               * holds a slot (MS_FALLING, this flag) so the UI draws it as a ghost,
+                                               * holds a slot (MS_FALLING, this flag) so the UI draws its outline,
                                                * keys never eat it, it is never missed (no trip, combo or event
                                                * but GE_NOTE when it sounds) */
 #define GN_SPAWN_CHAIN_END 2u                 /* the last of its chain */
@@ -273,7 +287,8 @@ uint32_t music_stash_pick(void);              /* the next stashable's AB_* (firs
 void game_init(uint32_t seed);
 /* The render step, called by app_render ONLY (app.c runs midi_in() first, so MIDI keys arrived through
  * game_midi_key), then app_render calls band_render. In this order: 1 take gn_cmd (ack = req); 2 read plat_keys()
- * and plat_buttons() (plain loads) and diff against the last block's masks; 3 judge the new presses, then the
+ * (a plain load) and diff against the last block's mask (buttons are the UI's: a key or a MIDI note ends the
+ * attract here, a button through CMD_STOP, so it never acts on the title too); 3 judge the new presses, then the
  * misses, against music_now(), the clock at the START of this block (jitter +-2.9 ms, inside PERFECT); 4
  * abilities, trip, stash, the boss, the count-in; 5 music_tick(n), which advances the clock, steps the backing and
  * calls game_spawn / game_boss / game_on_section / game_on_kick (a spawn's hit is >= now + fall, fall >= 2 beats
@@ -314,7 +329,7 @@ uint32_t game_gnome_lane(void);               /* the lane last pressed (the comp
 uint32_t game_last_press(void);
 uint32_t game_state(void);
 enum { GC_EATEN, GC_MISSED, GC_POISONED, GC_PERFECT, GC_SPAWNED, GC_AIR, GC_CHAINS, GC_BOSS_CHOMPS, GC_EV_DROPPED,
-       GC_SPAWN_DROPPED, GC_COUNT };
+       GC_SPAWN_DROPPED, GC_CLAMS, GC_COUNT };
 uint32_t game_count(uint32_t which);          /* since the run began */
 int32_t game_next_hit_ms(uint32_t *lane);     /* ms to the soonest hit ahead in any lane, -1 none (the simulator) */
 void game_auto(uint32_t n);                   /* the autoplayer: the next n mushrooms (not death caps) eaten at their
@@ -344,7 +359,7 @@ typedef struct {
     uint8_t trip_level;                  /* clamp(trip, 0, 999) / 100 */
     uint8_t gnome_lane;                  /* 0..6 */
     int8_t gnome_reg;                    /* -1..1 */
-    uint8_t stash[GN_STASH];             /* AB_*, the loaded ones first */
+    uint8_t stash[GN_STASH];             /* AB_* by slot (black key), AB_NONE an empty slot */
     uint8_t ability, ability_bars;       /* the active AB_* and bars left */
     uint8_t boss_on, boss_bites, boss_lanes[3];
     int16_t boss_y256;                   /* 0 at the spawn row .. 256 its lower edge on the mouth line */
@@ -370,8 +385,8 @@ int game_snapshot(gn_snap_t *dst);            /* UI: 1 a fresh consistent copy, 
 
 enum { GE_NONE, GE_EAT, GE_MISS, GE_POISON, GE_AGARIC, GE_STASH, GE_USE, GE_REFUSED, GE_CHAIN, GE_BOSS_CHOMP,
        GE_BOSS_EATEN, GE_BOSS_LANDED, GE_SECTION, GE_STAGE, GE_OVER, GE_KICK, GE_NOTE, GE_HIGHSCORE, GE_GHOST,
-       GE_WOBBLE, GE_COUNT };
-/* a, b, c: EAT lane, Q_*, species; MISS / POISON / NOTE / GHOST / AGARIC lane; STASH slot 0..2, AB_*; USE AB_*;
+       GE_WOBBLE, GE_CLAM, GE_COUNT };
+/* a, b, c: EAT lane, Q_*, species; MISS / POISON / NOTE / GHOST / AGARIC / CLAM lane; STASH slot 0..2, AB_*; USE AB_*;
  * REFUSED AB_* (a timed ability pressed while another runs: nothing happens but this); CHAIN chain id, length;
  * BOSS_CHOMP bites 1..3; SECTION SEC_*, stage 0..7; STAGE stage 0..7; KICK beat 0..3 (0 = the bar's first);
  * WOBBLE (JAM's refill), OVER, HIGHSCORE, BOSS_EATEN, BOSS_LANDED: none */
@@ -483,14 +498,14 @@ void app_splash(void);                   /* the boot screen (APP_SPLASH): the lo
 void gn_midi_note(uint32_t ch, uint32_t note, uint32_t vel, int on);   /* a note-on is dropped when
                                                * plat_midi_out_room(TO_USB | TO_BLE) is 0 (nobody listens) or under
                                                * 8 (room kept for the offs owed); a note-off is always offered */
-void gn_midi_realtime(uint32_t st);           /* F8 clock (music_tick, 24 a beat, at the SLOW rate too), FA at a start
-                                               * and when the last hold lifts, FC at a hold or stop */
+void gn_midi_realtime(uint32_t st);           /* F8 clock (music_tick, 24 a beat, at the SLOW rate too), FA at a start,
+                                               * FB when the last hold lifts, FC at a hold or stop */
 #define GN_SET_MAGIC 0x4D4F4E47u             /* "GNOM" */
 typedef struct {
     uint32_t magic;
     uint32_t hiscore;                    /* runs started at stage 0 only */
     uint8_t furthest;                    /* the furthest stage index reached, 0..7: the title's start pick goes this far */
-    uint8_t jam;                         /* JAM on by default */
+    uint8_t jam;                         /* JAM, off by default */
     uint8_t hat;                         /* the gnome's hat hue, 0..31 */
     uint8_t ble_off;                     /* Bluetooth switched off (REC held) */
     uint8_t voice;                       /* K3's LEAD patch, LP_* or 255 the stage's own */

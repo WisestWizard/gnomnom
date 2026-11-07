@@ -184,6 +184,8 @@ int app_expect(const char *what, int *got)
         *got = (int)game_count(GC_CHAINS);
     else if (!strcmp(what, "chomps"))
         *got = (int)game_count(GC_BOSS_CHOMPS);
+    else if (!strcmp(what, "clams"))
+        *got = (int)game_count(GC_CLAMS);
     else if (!strcmp(what, "evdropped"))
         *got = (int)game_count(GC_EV_DROPPED);
     else if (!strcmp(what, "nexthit"))

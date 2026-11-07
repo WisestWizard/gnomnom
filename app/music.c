@@ -29,8 +29,10 @@ static struct {
     mu_cur_t bk, sp;                     /* the backing cursor and the spawn cursor, fall ahead of it */
     mu_ev_t q[MU_QUEUE];
     uint32_t last_mush, lane_last[GN_LANES], mel_last[GN_LANES];
-    uint32_t chain_id, chain_end, agaric, stash, first_stash, dcap_mask;
+    uint32_t chain_id, chain_end, chain_rest, agaric, stash, first_stash, dcap_mask;   /* chain_rest: the tune time
+                                          * (16ths) before which no chain starts, a bar after the last */
     uint32_t arp, arp_i, hat_drop, bar_seed;
+    uint32_t thin;                       /* the trip low, decided each bar: 1 the hats out, 2 the stabs too */
 } mu;
 
 static const uint8_t MU_VAR[8] = {0, 0, 1, 0, 0, 0, 2, 3};
@@ -218,6 +220,8 @@ static int mu_q_push(uint32_t kind, uint32_t tick, uint32_t a, uint32_t b)
 }
 static void mu_drum(uint32_t d, uint32_t vel, uint32_t delay)
 {
+    if (mu.thin && (d == DR_HAT || d == DR_OHAT || d == DR_SHAKER))
+        return;
     if (delay && mu_q_push(MQ_DRUM, mu.now + delay, d, vel))
         return;
     band_drum(d, vel);
@@ -237,6 +241,8 @@ static void mu_bass_note(int32_t semis, uint32_t vel, uint32_t flags, uint32_t g
 static void mu_stab_note(int32_t semis, uint32_t vel, uint32_t gate)
 {
     uint32_t note = mu_clamp_note((int32_t)mu.root + semis);
+    if (mu.thin >= 2u)
+        return;
     band_note_on(PART_STAB, note, vel, 0);
     if (gate)
         mu_q_push(MQ_STAB_OFF, mu.now + gate, note, 0);
@@ -250,6 +256,7 @@ static void mu_stop(void)
     mu_q_clear();
     mu.running = 0;
     mu.run = 0;
+    mu.thin = 0;
     mu.arp = 0;
     mu.boss_due = 0;
     mu.over_gap = 0;
@@ -371,6 +378,17 @@ static void mu_bar_begin(void)
     mu_triad(tri);
     hz = 1.5f * 440.0f * fm_exp2f((float)((int32_t)mu.root + tri[0] - 69) * (1.0f / 12.0f));
     band_set(BP_RING_HZ, hz);
+    {                                    /* the trip's pull, on the bar line with some hysteresis */
+        float p = mu.run && mu.section != SEC_CLEAR ? band_get(BP_TRIP) : 0.0f;   /* never the fanfare */
+        if (p <= -0.8f)
+            mu.thin = 2;
+        else if (p <= -0.5f)
+            mu.thin = mu.thin == 2u && p <= -0.65f ? 2u : 1u;
+        else if (p >= -0.35f)
+            mu.thin = 0;
+        else if (mu.thin == 2u)
+            mu.thin = 1;
+    }
 }
 static void mu_tempo(void)
 {
@@ -683,7 +701,11 @@ static void mu_sp_bar(int32_t tb)
     for (i = 0; i < n; i++)
         mu.dcap_mask |= 1u << mu_rnd_n(steps);
 }
-static uint32_t mu_gap_ticks(void) { return (uint32_t)(music_ms_ticks((float)mu.row->min_gap_ms) + 0.5f); }
+static uint32_t mu_gap_ticks(int32_t tb)   /* wider over TUNE's first four bars: an on-ramp after the INTRO */
+{
+    float ms = (float)mu.row->min_gap_ms * (tb < 2 ? 1.5f : tb < 4 ? 1.25f : 1.0f);
+    return (uint32_t)(music_ms_ticks(ms) + 0.5f);
+}
 static uint32_t mu_is_mush(uint32_t bstep, uint32_t lane, uint32_t tick, uint32_t gap, uint32_t last,
                            const uint32_t *lane_last)
 {
@@ -693,13 +715,16 @@ static uint32_t mu_is_mush(uint32_t bstep, uint32_t lane, uint32_t tick, uint32_
 static void mu_chain_scan(const mu_cur_t *c)
 {
     const gn_tune_t *t = mu.tn;
-    uint32_t j = c->ni, tt = c->nt, cnt = 0;
+    uint32_t j = c->ni, tt = c->nt, cnt = 0, grid = 0;
+    if (tt < mu.chain_rest)              /* a stream of sixteenths would chain end to end */
+        return;
     while (cnt < 8u && j < t->nnotes && t->notes[j].dur <= 2u && GN_DEG(t->notes[j].deg) != 0u && !mu_dropped(tt)) {
+        grid += (tt % mu.row->density) == 0u;
         tt += t->notes[j].dur;
         j++;
         cnt++;
     }
-    if (cnt >= 6u) {
+    if (cnt >= 6u && grid >= 4u) {       /* at density 4 a run is only two mushrooms: no chain, or one every 2 beats */
         mu.chain_end = c->ni + cnt - 1u;
         mu.chain_id = mu.chain_id % 255u + 1u;
     }
@@ -725,7 +750,7 @@ static uint32_t mu_chain_more(const mu_cur_t *c, uint32_t tick, uint32_t gap)
 static void mu_spawn_note(const gn_note_t *n, const mu_cur_t *c, uint32_t tick)
 {
     uint32_t lane = GN_DEG(n->deg) - 1u, note = mu_pitch(n, mu.sp_mode), species = SP_PORCINI, chain = 0, flags = 0;
-    uint32_t gap = mu_gap_ticks(), mush;
+    uint32_t gap = mu_gap_ticks(c->tb), mush;
     mush = mu_is_mush(c->bstep, lane, tick, gap, mu.last_mush, mu.lane_last);
     if (mu.chain_end == MU_NONE && n->dur <= 2u)
         mu_chain_scan(c);
@@ -750,6 +775,8 @@ static void mu_spawn_note(const gn_note_t *n, const mu_cur_t *c, uint32_t tick)
     } else {
         flags |= GN_SPAWN_AUTO;
     }
+    if (chain && mu.chain_end == MU_NONE)
+        mu.chain_rest = c->nt + 16u;
     mu.mel_last[lane] = tick;
     game_spawn(lane, tick, species, note, chain, flags);
 }
@@ -934,6 +961,7 @@ void music_stage(uint32_t stage, uint32_t round, uint32_t seed)
     for (i = 0; i < GN_LANES; i++)
         mu.lane_last[i] = mu.mel_last[i] = 0;
     mu.chain_end = MU_NONE;
+    mu.chain_rest = 0;
     mu.agaric = mu.stash = mu.dcap_mask = 0;
     mu.first_stash = r->first_stash;
     band_set(BP_LEAD_PATCH, (float)r->lead);
@@ -1029,7 +1057,7 @@ void music_hold(uint32_t reason, int on)
         if (!was && mu.hold)
             gn_midi_realtime(0xFC);
         else if (was && !mu.hold)
-            gn_midi_realtime(0xFA);
+            gn_midi_realtime(0xFB);      /* Continue: a slaved sequencer resumes in place, not from the top */
     }
     if (reason & HOLD_FREEZE) {
         band_set(BP_FREEZE, on ? 1.0f : 0.0f);

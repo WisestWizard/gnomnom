@@ -14,52 +14,47 @@
 #define TN_MINOR {0, 2, 3, 5, 7, 8, 10}
 #define TN_DORIAN {0, 2, 3, 5, 7, 9, 10}
 
-/* In the Hall of the Mountain King: the theme and its answer a fifth up, then both an octave higher. The raised
- * tonic of the answer is the theme's sharpened fourth transposed. */
+/* In the Hall of the Mountain King: the theme and its answer a fifth up, then both an octave higher. Its second
+ * bar is #4 2 #4 | 4 b2 4 (E# C# E# | E C E in B); the answer's raised and lowered notes are those transposed. */
 #define TN_MOUNTAIN_HALF(k) \
     TN(1, k, 2), TN(2, k, 2), TN(3, k, 2), TN(4, k, 2), TN(5, k, 2), TN(3, k, 2), TN(5, k, 2), TR(2), \
-    TN(TS(4), k, 2), TN(3, k, 2), TN(TS(4), k, 2), TN(TS(4), k, 6), TR(4), \
+    TN(TS(4), k, 2), TN(2, k, 2), TN(TS(4), k, 2), TR(2), TN(4, k, 2), TN(TF(2), k, 2), TN(4, k, 2), TR(2), \
     TN(1, k, 2), TN(2, k, 2), TN(3, k, 2), TN(4, k, 2), TN(5, k, 2), TN(3, k, 2), TN(5, k, 2), TN(1, k + 1, 2), \
     TN(7, k, 2), TN(5, k, 2), TN(3, k, 2), TN(5, k, 2), TN(7, k, 6), TR(2), \
     TN(5, k, 2), TN(6, k, 2), TN(7, k, 2), TN(1, k + 1, 2), TN(2, k + 1, 2), TN(7, k, 2), TN(2, k + 1, 2), TR(2), \
-    TN(TS(1), k + 1, 2), TN(7, k, 2), TN(TS(1), k + 1, 2), TN(TS(1), k + 1, 6), TR(4), \
+    TN(TS(1), k + 1, 2), TN(6, k, 2), TN(TS(1), k + 1, 2), TR(2), TN(1, k + 1, 2), TN(TF(6), k, 2), TN(1, k + 1, 2), TR(2), \
     TN(5, k, 2), TN(6, k, 2), TN(7, k, 2), TN(1, k + 1, 2), TN(2, k + 1, 2), TN(7, k, 2), TN(2, k + 1, 2), TN(5, k + 1, 2), \
     TN(4, k + 1, 2), TN(2, k + 1, 2), TN(7, k, 2), TN(2, k + 1, 2), TN(4, k + 1, 6), TR(2)
 static const gn_note_t tn_mountain[] = { TN_MOUNTAIN_HALF(0), TN_MOUNTAIN_HALF(1) };
 static const uint8_t tn_mountain_ch[16] = {1, 1, 1, 1, 5, 5, 5, 5, 1, 1, 1, 1, 5, 5, 5, 5};
 
-/* Korobeiniki: the A strain, four bars of the B strain with passing notes, the A strain's first half again */
+/* Korobeiniki: the A strain's two halves, twice */
 #define TN_KORO_A1 \
     TN(5, 0, 4), TN(2, 0, 2), TN(3, 0, 2), TN(4, 0, 4), TN(3, 0, 2), TN(2, 0, 2), \
     TN(1, 0, 4), TN(1, 0, 2), TN(3, 0, 2), TN(5, 0, 4), TN(4, 0, 2), TN(3, 0, 2), \
     TN(2, 0, 6), TN(3, 0, 2), TN(4, 0, 4), TN(5, 0, 4), \
     TN(3, 0, 4), TN(1, 0, 4), TN(1, 0, 6), TR(2)
-static const gn_note_t tn_koro[] = {
-    TN_KORO_A1,
-    TR(2), TN(4, 0, 4), TN(6, 0, 2), TN(1, 1, 4), TN(7, 0, 2), TN(6, 0, 2),
-    TN(5, 0, 6), TN(3, 0, 2), TN(5, 0, 4), TN(4, 0, 2), TN(3, 0, 2),
-    TN(2, 0, 4), TN(2, 0, 2), TN(3, 0, 2), TN(4, 0, 4), TN(5, 0, 4),
-    TN(3, 0, 4), TN(1, 0, 4), TN(1, 0, 6), TR(2),
-    TN(5, 0, 4), TN(4, 0, 2), TN(3, 0, 2), TN(3, 0, 4), TN(2, 0, 2), TN(4, 0, 2),
-    TN(4, 0, 4), TN(3, 0, 2), TN(2, 0, 2), TN(2, 0, 4), TN(1, 0, 2), TN(2, 0, 2),
-    TN(3, 0, 4), TN(2, 0, 2), TN(1, 0, 2), TN(1, 0, 4), TN(TS(7), -1, 2), TN(1, 0, 2),
-    TN(TS(7), -1, 4), TN(1, 0, 2), TN(2, 0, 2), TN(2, 0, 4), TN(3, 0, 2), TN(4, 0, 2),
-    TN_KORO_A1
-};
+#define TN_KORO_A2 \
+    TR(2), TN(4, 0, 4), TN(6, 0, 2), TN(1, 1, 4), TN(7, 0, 2), TN(6, 0, 2), \
+    TN(5, 0, 6), TN(3, 0, 2), TN(5, 0, 4), TN(4, 0, 2), TN(3, 0, 2), \
+    TN(2, 0, 4), TN(2, 0, 2), TN(3, 0, 2), TN(4, 0, 4), TN(5, 0, 4), \
+    TN(3, 0, 4), TN(1, 0, 4), TN(1, 0, 6), TR(2)
+static const gn_note_t tn_koro[] = { TN_KORO_A1, TN_KORO_A2, TN_KORO_A1, TN_KORO_A2 };
 static const uint8_t tn_koro_ch[16] = {1, 1, 5 | GN_CH_MAJOR, 1, 4, 1, 5 | GN_CH_MAJOR, 1,
-                                       1, 5 | GN_CH_MAJOR, 1, 5 | GN_CH_MAJOR, 1, 1, 5 | GN_CH_MAJOR, 1};
+                                       1, 1, 5 | GN_CH_MAJOR, 1, 4, 1, 5 | GN_CH_MAJOR, 1};
 
-/* Pachelbel's Canon in C: the quarter-note theme with its stepwise eighths over one chord a bar, then the
- * eighth-note variations, the I V vi iii IV I IV V loop twice */
+/* Pachelbel's Canon in C over one chord a bar, the I V vi iii IV I IV V loop twice: the first violin's three
+ * entries (E D C B A G A B, C B A G F E F D, C E G F E C E D C A C G F A G F) in quarters, the same three in
+ * eighths, then the eighth-note variations */
 static const gn_note_t tn_canon[] = {
-    TN(3, 1, 4), TN(2, 1, 2), TN(1, 1, 2), TN(2, 1, 4), TN(1, 1, 2), TN(7, 0, 2),
-    TN(1, 1, 4), TN(7, 0, 2), TN(6, 0, 2), TN(7, 0, 4), TN(6, 0, 2), TN(5, 0, 2),
-    TN(6, 0, 4), TN(5, 0, 2), TN(4, 0, 2), TN(5, 0, 4), TN(4, 0, 2), TN(3, 0, 2),
-    TN(6, 0, 4), TN(5, 0, 2), TN(4, 0, 2), TN(7, 0, 4), TN(6, 0, 2), TN(5, 0, 2),
-    TN(1, 1, 4), TN(7, 0, 2), TN(6, 0, 2), TN(7, 0, 4), TN(6, 0, 2), TN(5, 0, 2),
-    TN(6, 0, 4), TN(5, 0, 2), TN(4, 0, 2), TN(5, 0, 4), TN(4, 0, 2), TN(3, 0, 2),
-    TN(4, 0, 4), TN(3, 0, 2), TN(2, 0, 2), TN(3, 0, 4), TN(2, 0, 2), TN(1, 0, 2),
-    TN(4, 0, 4), TN(3, 0, 2), TN(2, 0, 2), TN(2, 0, 4), TN(1, 0, 2), TN(7, -1, 2),
+    TN(3, 1, 4), TN(2, 1, 4), TN(1, 1, 4), TN(7, 0, 4),
+    TN(6, 0, 4), TN(5, 0, 4), TN(6, 0, 4), TN(7, 0, 4),
+    TN(1, 1, 4), TN(7, 0, 4), TN(6, 0, 4), TN(5, 0, 4),
+    TN(4, 0, 4), TN(3, 0, 4), TN(4, 0, 4), TN(2, 0, 4),
+    TN(1, 1, 4), TN(3, 1, 4), TN(5, 1, 4), TN(4, 1, 4),
+    TN(3, 1, 4), TN(1, 1, 4), TN(3, 1, 4), TN(2, 1, 4),
+    TN(1, 1, 4), TN(6, 0, 4), TN(1, 1, 4), TN(5, 0, 4),
+    TN(4, 0, 4), TN(6, 0, 4), TN(5, 0, 4), TN(4, 0, 4),
     TN(3, 1, 2), TN(2, 1, 2), TN(1, 1, 2), TN(7, 0, 2), TN(6, 0, 2), TN(5, 0, 2), TN(6, 0, 2), TN(7, 0, 2),
     TN(1, 1, 2), TN(7, 0, 2), TN(6, 0, 2), TN(5, 0, 2), TN(4, 0, 2), TN(3, 0, 2), TN(4, 0, 2), TN(2, 0, 2),
     TN(1, 1, 2), TN(3, 1, 2), TN(5, 1, 2), TN(4, 1, 2), TN(3, 1, 2), TN(1, 1, 2), TN(3, 1, 2), TN(2, 1, 2),
@@ -118,13 +113,14 @@ static const gn_note_t tn_fate[] = {
 static const uint8_t tn_fate_ch[16] = {1, 5 | GN_CH_MAJOR, 5 | GN_CH_MAJOR, 1, 3, 5 | GN_CH_MAJOR, 5 | GN_CH_MAJOR,
                                        5 | GN_CH_MAJOR, 1, 4, 6, 7, 1, 1, 6, 1};
 
-/* Mozart's Rondo alla Turca: the sixteenth-note turns and their answers, an octave up the second time, the broken
- * chords, the opening again (two 2/4 bars a bar) */
+/* Mozart's Rondo alla Turca: the sixteenth-note turns climbing to the octave (B A G# A C, D C B C E, F E D# E,
+ * then B A G# A twice an octave up and the high C), their answers, the whole an octave up the second time, the
+ * broken chords, the opening again (two 2/4 bars a bar) */
 #define TN_TURCA_A(k) \
     TN(2, k, 1), TN(1, k, 1), TN(TS(7), k - 1, 1), TN(1, k, 1), TN(3, k, 2), TR(2), \
     TN(4, k, 1), TN(3, k, 1), TN(2, k, 1), TN(3, k, 1), TN(5, k, 2), TR(2), \
-    TN(6, k, 1), TN(5, k, 1), TN(TS(4), k, 1), TN(5, k, 1), TN(2, k, 1), TN(1, k, 1), TN(TS(7), k - 1, 1), TN(1, k, 1), \
-    TN(2, k, 1), TN(1, k, 1), TN(TS(7), k - 1, 1), TN(1, k, 1), TN(3, k, 4), \
+    TN(6, k, 1), TN(5, k, 1), TN(TS(4), k, 1), TN(5, k, 1), TN(2, k + 1, 1), TN(1, k + 1, 1), TN(TS(7), k, 1), TN(1, k + 1, 1), \
+    TN(2, k + 1, 1), TN(1, k + 1, 1), TN(TS(7), k, 1), TN(1, k + 1, 1), TN(3, k + 1, 4), \
     TN(3, k, 1), TN(4, k, 1), TN(3, k, 1), TN(2, k, 1), TN(1, k, 2), TR(2), \
     TN(1, k, 1), TN(TS(7), k - 1, 1), TN(1, k, 1), TN(2, k, 1), TN(3, k, 2), TR(2), \
     TN(3, k, 1), TN(4, k, 1), TN(3, k, 1), TN(2, k, 1), TN(1, k, 1), TN(TS(7), k - 1, 1), TN(1, k, 1), TN(2, k, 1), \
@@ -167,7 +163,13 @@ static const gn_note_t tn_bee[] = {
 static const uint8_t tn_bee_ch[16] = {1, 1, 5 | GN_CH_MAJOR, 5 | GN_CH_MAJOR, 1, 1, 4, 5 | GN_CH_MAJOR,
                                       1, 1, 5 | GN_CH_MAJOR, 5 | GN_CH_MAJOR, 1, 4, 5 | GN_CH_MAJOR, 1};
 
-/* Offenbach's Infernal Galop: the galloping strain and the scale runs (two 2/4 bars a bar) */
+/* Offenbach's Infernal Galop: the Can-Can's own strain (C, D F E D, G G, G A E F, D D, D F E D, C C' B A, G F E D,
+ * and again to C G D E C), then the galloping strain and the scale runs (two 2/4 bars a bar) */
+#define TN_CANCAN_HALF(n1, o1, n2, o2, n3, o3, n4, o4) \
+    TN(1, 1, 8), TN(2, 1, 2), TN(4, 1, 2), TN(3, 1, 2), TN(2, 1, 2), \
+    TN(5, 1, 4), TN(5, 1, 4), TN(5, 1, 2), TN(6, 1, 2), TN(3, 1, 2), TN(4, 1, 2), \
+    TN(2, 1, 4), TN(2, 1, 4), TN(2, 1, 2), TN(4, 1, 2), TN(3, 1, 2), TN(2, 1, 2), \
+    TN(n1, o1, 2), TN(n2, o2, 2), TN(n3, o3, 2), TN(n4, o4, 2)
 #define TN_CANCAN_A \
     TN(5, 0, 2), TN(5, 0, 2), TN(1, 1, 2), TN(1, 1, 2), TN(2, 1, 2), TN(1, 1, 2), TN(7, 0, 2), TN(1, 1, 2), \
     TN(6, 0, 2), TN(6, 0, 2), TN(2, 1, 2), TN(2, 1, 2), TN(3, 1, 2), TN(2, 1, 2), TN(1, 1, 2), TN(2, 1, 2), \
@@ -177,12 +179,12 @@ static const uint8_t tn_bee_ch[16] = {1, 1, 5 | GN_CH_MAJOR, 5 | GN_CH_MAJOR, 1,
     TN(2, 0, 2), TN(3, 0, 2), TN(4, 0, 2), TN(5, 0, 2), TN(6, 0, 2), TN(7, 0, 2), TN(1, 1, 2), TN(2, 1, 2), \
     TN(3, 1, 2), TN(2, 1, 2), TN(1, 1, 2), TN(7, 0, 2), TN(6, 0, 2), TN(5, 0, 2), TN(4, 0, 2), TN(3, 0, 2)
 static const gn_note_t tn_cancan[] = {
-    TN_CANCAN_A,
-    TN(2, 0, 2), TN(2, 0, 2), TN(5, 0, 2), TN(5, 0, 2), TN(1, 0, 8),
+    TN_CANCAN_HALF(1, 1, 1, 2, 7, 1, 6, 1), TN(5, 1, 2), TN(4, 1, 2), TN(3, 1, 2), TN(2, 1, 2),
+    TN_CANCAN_HALF(1, 1, 5, 0, 2, 1, 3, 1), TN(1, 1, 8),
     TN_CANCAN_A,
     TN(2, 0, 2), TN(2, 0, 2), TN(5, -1, 2), TN(5, 0, 2), TN(1, 0, 8)
 };
-static const uint8_t tn_cancan_ch[16] = {1, 5, 1, 5, 1, 5, 1, 1, 1, 5, 1, 5, 1, 5, 5, 1};
+static const uint8_t tn_cancan_ch[16] = {1, 1, 5, 1, 1, 1, 5, 1, 1, 5, 1, 5, 1, 5, 5, 1};
 
 /* Chopin's funeral march: the first phrase, for GAME OVER */
 static const gn_note_t tn_funeral[] = {
@@ -212,7 +214,7 @@ const gn_stage_t GN_STAGES[GN_NSTAGES] = {
     {"SPORE DRIFT", TUNE_KOROBEINIKI, TN_MINOR, 60, 112, 118, GENRE_HOUSE, KIT_HOUSE, BS_HOUSE, SS_STAB, LP_SAW, VT_DUSK,
      8, 1, 220, 2, 1, 30, 80, 8, 6, AB_WIDE, {1, 4, 2, 3, 4, 1, 1, 2}, 4, 30, 20, 20, 0, 0, 0, 0, 35},
     {"CAP OPENING", TUNE_CANON, TN_MAJOR, 60, 124, 126, GENRE_DEEP, KIT_HOUSE, BS_HOUSE, SS_PAD, LP_SAW, VT_NIGHT,
-     8, 1, 200, 4, 0, 45, 80, 8, 6, AB_NONE, {2, 3, 3, 3, 3, 1, 2, 2}, 4, 40, 30, 25, 0, 0, 0, 0, 60},
+     8, 1, 250, 4, 0, 45, 80, 8, 6, AB_NONE, {2, 3, 3, 3, 3, 1, 2, 2}, 4, 40, 30, 25, 0, 0, 0, 0, 60},
     {"RED SPOTS", TUNE_HUNGARIAN, TN_MINOR, 60, 128, 134, GENRE_ACID, KIT_TECHNO, BS_ACID, SS_OFF, LP_SAW, VT_RED,
      8, 1, 200, 4, 0, 45, 90, 8, 8, AB_NONE, {3, 2, 3, 2, 2, 2, 2, 2}, 6, 20, 35, 20, 0, 0, 0, 10, 30},
     {"THE WAVY BIT", TUNE_FATE, TN_MINOR, 60, 136, 140, GENRE_RAVE, KIT_TECHNO, BS_HARD, SS_HOOVER, LP_SQUARE, VT_KALEIDO,
@@ -220,7 +222,7 @@ const gn_stage_t GN_STAGES[GN_NSTAGES] = {
     {"KALEIDOSCOPE", TUNE_TURCA, TN_MINOR, 60, 138, 144, GENRE_BREAKS, KIT_BREAKS, BS_HOUSE, SS_STAB, LP_SAW, VT_MIRROR4,
      10, 2, 180, 4, 0, 60, 100, 8, 8, AB_NONE, {4, 1, 3, 1, 1, 3, 3, 3}, 8, 20, 40, 20, 0, 25, 0, 40, 20},
     {"SPIRAL EYES", TUNE_BUMBLEBEE, TN_MINOR, 60, 146, 152, GENRE_IDM, KIT_GLITCH, BS_ACID, SS_STAB, LP_BELL, VT_EYES,
-     10, 4, 170, 4, 0, 60, 100, 8, 8, AB_NONE, {4, 1, 4, 1, 1, 3, 4, 3}, 10, 30, 50, 30, 20, 40, 25, 70, 30},
+     10, 2, 170, 4, 0, 60, 100, 8, 8, AB_NONE, {4, 1, 4, 1, 1, 3, 4, 3}, 8, 30, 50, 30, 20, 40, 25, 70, 30},
     {"ENLIGHTENMENT", TUNE_CANCAN, TN_MAJOR, 60, 158, 168, GENRE_HARD, KIT_TECHNO, BS_HARD, SS_HOOVER, LP_SQUARE, VT_CHAOS,
-     10, 4, 170, 4, 0, 60, 100, 8, 8, AB_NONE, {4, 1, 3, 1, 1, 4, 4, 4}, 12, 60, 50, 45, 40, 30, 35, 60, 70},
+     10, 2, 170, 4, 0, 60, 100, 8, 8, AB_NONE, {4, 1, 3, 1, 1, 4, 4, 4}, 12, 60, 50, 45, 40, 30, 35, 60, 70},
 };

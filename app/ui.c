@@ -17,6 +17,7 @@
 #define UI_LANE_X(l) ((int32_t)(l) * GFX_LANE_W + 8)
 #define UI_GNOME_Y 92                    /* the gnome's top: 20 tall, feet on the ground row */
 #define UI_BTN_ALL ((1u << NB) - 1u)
+#define UI_OUTLINE 128u                  /* ui_draw_mush: the silhouette's edge only (an AUTO note) */
 
 static const char *const UI_BTN_NAME[NB] = {"FX", "SEL", "ENV", "LFO", "EDIT", "GLO", "HOME", "SAVE", "ARP", "SEQ",
                                             "PLAY", "REC", "OCT-", "OCT+"};
@@ -46,6 +47,7 @@ static struct {
     uint32_t now, frame_t, dt, frame;
     uint32_t keys, btn;                  /* held at the last input */
     uint32_t idle_t, rec_t;              /* the last input (the attract); REC went down (0: not held or acted) */
+    uint32_t air_seen, flash_t;          /* the game's air count (MIDI play is input too); the last PERFECT flash */
     uint8_t looking;                     /* Bluetooth MIDI devices: the scan is up (lib/btdev) */
     uint8_t last_state;
     uint32_t pick, start_stage;          /* the title's pick, and the stage this run began at (PLAY AGAIN) */
@@ -223,6 +225,11 @@ static void ui_cmd(uint32_t cmd, uint32_t stage, uint32_t jam)   /* one a frame,
     gn_cmd.cmd = cmd;
     gn_cmd.stage = stage;
     gn_cmd.jam = jam;
+#ifndef PLAT_HOST                        /* each run its own death caps, stash picks and remixes; the simulator keeps
+                                          * app.c's fixed seed (or gn seed) so a run reproduces */
+    if (cmd == CMD_START || cmd == CMD_ATTRACT)
+        gn_cmd.seed = (plat_ms() ^ plat_ticks24() << 8) | 1u;
+#endif
     GN_BARRIER();
     gn_cmd.req++;
 }
@@ -304,7 +311,8 @@ static void ui_button(uint32_t k)        /* a button's edge */
                 gn_settings_save();
             ui.start_stage = ui.pick;
             ui_cmd(CMD_START, ui.pick, gn_set.jam);
-        } else if (st == GS_PLAY) {
+        } else if (st == GS_PLAY || (st == GS_PAUSE && ui.snap.countin)) {   /* the count-in looks like play:
+                                          * PLAY and HOME pause it again, as in play */
             ui_cmd(CMD_PAUSE, 0, 0);
         } else if (st == GS_PAUSE) {
             ui_cmd(CMD_RESUME, 0, 0);
@@ -313,10 +321,13 @@ static void ui_button(uint32_t k)        /* a button's edge */
         }
         return;
     case B_HOME:
-        if (st == GS_PLAY) {
+        if (st == GS_PLAY || (st == GS_PAUSE && ui.snap.countin)) {
             ui_cmd(CMD_PAUSE, 0, 0);
-        } else if (st == GS_PAUSE || st == GS_OVER) {
+        } else if (st == GS_PAUSE) {
             ui_bank();
+            ui_cmd(CMD_STOP, 0, 0);
+        } else if (st == GS_OVER) {     /* the run was banked in the silence; a knob since stays dirty until the
+                                          * next PLAY: a save now would cut the march */
             ui_cmd(CMD_STOP, 0, 0);
         } else {
             ui_say("BUTTON", "HOME");
@@ -424,8 +435,9 @@ static void ui_input(void)
 {
     uint32_t now = ui.now, keys = plat_keys(), btn = plat_buttons(), edges = btn & ~ui.btn, k;
     int32_t e;
-    if (keys != ui.keys || edges)
+    if (keys != ui.keys || edges || game_count(GC_AIR) != ui.air_seen)
         ui.idle_t = now;
+    ui.air_seen = game_count(GC_AIR);
     if (ui.snap.state == GS_ATTRACT && edges) {   /* any button leaves the demo (the game leaves on a key) */
         ui_cmd(CMD_STOP, 0, 0);
         ui.rec_t = 0;
@@ -434,7 +446,8 @@ static void ui_input(void)
             if (!(edges >> k & 1u))
                 continue;
             if (k == B_REC && FM1B_BLE)
-                ui.rec_t = now | 1u;     /* a press acts on release; a hold switches Bluetooth */
+                ui.rec_t = (now - 1u) | 1u;   /* a press acts on release; a hold switches Bluetooth. Never 0 and
+                                               * never ahead of now (now | 1 was, and a tap then toggled it) */
             else
                 ui_button(k);
         }
@@ -531,8 +544,11 @@ static void ui_events(void)
             ui.bite = 6;
             ui.lane_toast[lane] = 20;
             ui.lane_toast_q[lane] = e.b;
-            if (e.b == Q_PERFECT && lv >= 4u)
-                ui.flash = 1;
+            if (e.b == Q_PERFECT && lv >= 7u && ui.now - ui.flash_t >= 500u) {   /* only high on the trip, at most
+                                          * twice a second, held two frames (a single-frame flip tears) */
+                ui.flash = 2;
+                ui.flash_t = ui.now;
+            }
             break;
         case GE_MISS:
             ui.wince = 8;
@@ -605,21 +621,29 @@ static void ui_events(void)
             }
             break;
         case GE_OVER:
-            ui.over_seen = 1;
-            ui_bank();
+            if (!ui.over_seen) {
+                ui.over_seen = 1;
+                ui_bank();
+            }
             break;
         case GE_KICK:
             if ((th == VT_EYES || th == VT_CHAOS || ui.snap.round) && e.a == 0u)
                 ui.strobe = 2;
             else if (th == VT_EYES || th == VT_CHAOS || ui.snap.round)
-                ui.kick = 1;
+                ui.kick = 2;
             break;
         case GE_NOTE:
             ui_ring(lane);
             break;
         case GE_HIGHSCORE:
             ui.newhigh = 1;
-            ui_say("NEW HIGH SCORE", "");
+            if (!gn_set_dirty)           /* still dirty: the save just failed, and SAVE FAILED must stay up */
+                ui_say("NEW HIGH SCORE", "");
+            break;
+        case GE_CLAM:                    /* a wrong key: OOPS over the lane, the gnome winces */
+            ui.lane_toast[lane] = 20;
+            ui.lane_toast_q[lane] = Q_NONE;
+            ui.wince = 6;
             break;
         case GE_GHOST:
             ui.ghost[lane] = 8;
@@ -651,8 +675,21 @@ static void ui_watch(void)               /* state changes (before the frame's ev
             ui.card_until = ui.boss_card_until = ui.counters_until = ui.agaric_until = 0;
             ui.gnome_x = (int32_t)s->gnome_lane * GFX_LANE_W;
         }
-        if (st == GS_OVER && !ui.over_seen)   /* the event was dropped: bank anyway, the game is silent now */
+        if (st == GS_OVER && !ui.over_seen) {   /* bank now, the game is silent; GE_OVER, when it comes, does not
+                                          * bank again (a failed save would be tried twice and its message lost) */
+            ui.over_seen = 1;
             ui_bank();
+        }
+        if (ann_on()) {                  /* the reader hears where the game went, not only on WHERE */
+            if (st == GS_PAUSE && ui.last_state == GS_PLAY)
+                ann_say("PAUSED", 0, 0);
+            else if (st == GS_PLAY && ui.last_state == GS_PAUSE)
+                ann_say("RESUME", 0, 0);
+            else if (st == GS_OVER)
+                ann_say("YOU CAME DOWN", 0, 0);
+            else if (st == GS_TITLE && ui.last_state != GS_ATTRACT)
+                ann_say("TITLE", 0, 0);
+        }
         ui.last_state = (uint8_t)st;
     }
     if (st == GS_TITLE) {
@@ -838,10 +875,10 @@ static void ui_post(void)
             fwave = lv - 4u > 3u ? 3u : lv - 4u;
         if (ui.poison)
             r = 40, g = 220, b = 60, amt = 120;
-        if (ui.kick)
+        if (ui.kick && !gn_set.flash_off)
             r = g = b = 255, amt = 77;
         if (ui.flash && !gn_set.flash_off)
-            r = g = b = 255, amt = 150;
+            r = g = b = 255, amt = 110;
         if (ui.shake) {
             fwave = 3;
             bend += (ui.frame & 1u) ? 8 : -8;
@@ -977,10 +1014,25 @@ static void ui_draw_gnome(int32_t x)
     gfx_sprite(sp, x, UI_GNOME_Y, 0);
 }
 
+static void ui_sprite_outline(const gn_sprite_t *sp, int32_t x, int32_t y, uint8_t c)
+{
+    int32_t i, j, w = sp->w, h = sp->h;
+    for (j = 0; j < h; j++)
+        for (i = 0; i < w; i++) {
+            const uint8_t *p = sp->px + j * w + i;
+            if (*p && (i == 0 || j == 0 || i == w - 1 || j == h - 1 || !p[-1] || !p[1] || !p[-w] || !p[w]))
+                gfx_pixel(x + i, y + j, c);
+        }
+}
+
 static void ui_draw_mush(const gn_mush_snap_t *m, int32_t y256, uint32_t lane, uint32_t flags)
 {
     const gn_sprite_t *sp = &GN_MUSH[m->species % SP_COUNT];
     int32_t x = UI_LANE_X(lane) - sp->w / 2, y = GFX_FIELD_TOP + UI_FIELD_H * y256 / 256 - sp->h / 2;
+    if (flags & UI_OUTLINE) {
+        ui_sprite_outline(sp, x, y, GN_C_LGREY);
+        return;
+    }
     gfx_sprite(sp, x, y, flags);
     if (m->state == MS_FROZEN)
         gfx_frame(x - 1, y - 1, sp->w + 2, sp->h + 2, GN_C_CYAN);
@@ -1011,6 +1063,8 @@ static void ui_draw_hud(void)
     if (s->round)
         ui_cat(t, "+");
     gfx_text(100, 2, t, GN_C_LGREY, 0);
+    if (ui.now < ui.msg_until)           /* a message has the line under the HUD */
+        return;
     if (s->state == GS_ATTRACT)
         ui_text_c(GFX_FIELD_TOP + 1, "DEMO", GN_C_YELLOW, 0);
     else if (s->practice)
@@ -1043,14 +1097,24 @@ static void ui_draw_ground_row(void)
     }
 }
 
-static void ui_draw_message(void)        /* below the title card while one shows, else over the field's middle */
+static void ui_draw_message(void)        /* in play a line under the HUD, never over the mushrooms; else a box
+                                          * over the field's middle */
 {
     uint32_t big = gfx_text_w(ui.msg[0], GFX_X2) <= GFX_W ? GFX_X2 : 0u;
     int32_t w0 = gfx_text_w(ui.msg[0], big), w1 = ui.msg[1][0] ? gfx_text_w(ui.msg[1], 0) : 0;
-    int32_t w = (w0 > w1 ? w0 : w1) + 6, h = ui.msg[1][0] ? 24 : 16;
-    int32_t y = ui_in_run() && ui.now < ui.card_until && ui.snap.section == SEC_INTRO ? 66 : 38;
+    int32_t w = (w0 > w1 ? w0 : w1) + 6, h = ui.msg[1][0] ? 24 : 16, y = 38, x;
     if (ui.now >= ui.msg_until)
         return;
+    if (ui_in_run() && ui.snap.state != GS_PAUSE) {
+        w0 = gfx_text_w(ui.msg[0], 0);
+        w = w0 + (w1 ? 4 + w1 : 0);
+        x = (GFX_W - w) / 2;
+        gfx_rect(x - 2, GFX_FIELD_TOP, w + 4, 7, GN_C_NIGHT);
+        x = gfx_text(x, GFX_FIELD_TOP + 1, ui.msg[0], GN_C_WHITE, 0);
+        if (w1)
+            gfx_text(x + 4, GFX_FIELD_TOP + 1, ui.msg[1], GN_C_YELLOW, 0);
+        return;
+    }
     gfx_rect((GFX_W - w) / 2, y, w, h, GN_C_NIGHT);
     gfx_frame((GFX_W - w) / 2, y, w, h, GN_C_DGREY);
     ui_text_c(y + (big ? 2 : 5), ui.msg[0], GN_C_WHITE, big);
@@ -1066,6 +1130,16 @@ static void ui_draw_play(void)
     char t[32];
     gfx_target(GFX_FIELD);
     gfx_clear(0);
+    if (ui_theme() >= VT_KALEIDO) {      /* the plasma stages: a dark track behind each lane, every other pixel
+                                          * night, so the mushrooms read over the colour; the gaps keep it */
+        uint8_t *f = gfx_buf(GFX_FIELD);
+        for (y = GFX_FIELD_TOP; y < GFX_MOUTH; y++)
+            for (i = 0; i < GN_LANES; i++) {
+                int32_t x, x0 = UI_LANE_X(i) - 5;
+                for (x = x0 + ((y + x0) & 1); x <= UI_LANE_X(i) + 5; x += 2)
+                    f[y * GFX_W + x] = GN_C_NIGHT;
+            }
+    }
     for (i = 1; i < GN_LANES; i++)
         for (y = GFX_FIELD_TOP; y < GFX_MOUTH; y += 2)
             gfx_pixel((int32_t)i * GFX_LANE_W, y, GN_C_DGREY);
@@ -1074,7 +1148,9 @@ static void ui_draw_play(void)
     if (ui_stage() <= 2u || gn_set.furthest == 0u)
         for (i = 0; i < GN_LANES; i++) {
             char l[2] = {UI_LANE_LETTER[i], 0};
-            gfx_text(UI_LANE_X(i) - gfx_text_w(l, 0) / 2, 105, l, GN_C_GREY, 0);
+            gfx_text(UI_LANE_X(i) - gfx_text_w(l, 0) / 2 + 1, 106, l, GN_C_NIGHT, 0);   /* a shadow: the floor
+                                          * ramp under them changes with the theme */
+            gfx_text(UI_LANE_X(i) - gfx_text_w(l, 0) / 2, 105, l, GN_C_LGREY, 0);
         }
     if (s->ability == AB_ARP)            /* lasers up the lanes in time with the beat */
         for (i = 0; i < GN_LANES; i++) {
@@ -1093,10 +1169,10 @@ static void ui_draw_play(void)
         if (m->state == MS_FREE || m->state == MS_EATEN)
             continue;
         if (m->flags & GN_SPAWN_AUTO)
-            flags = GFX_GHOST | GFX_DIM;
+            flags = UI_OUTLINE;
         else if (m->state == MS_MISSED)
             flags = GFX_DIM;
-        if (trails && ui.prev_state[i] == MS_FALLING && m->state == MS_FALLING && ui.prev_lane[i] == m->lane
+        if (trails && !(flags & UI_OUTLINE) && ui.prev_state[i] == MS_FALLING && m->state == MS_FALLING && ui.prev_lane[i] == m->lane
             && ui.prev_y[i] < m->y256)
             ui_draw_mush(m, ui.prev_y[i], m->lane, flags | GFX_DIM);
         ui_draw_mush(m, m->y256, m->lane, flags);
@@ -1129,10 +1205,11 @@ static void ui_draw_play(void)
     ui_draw_ground_row();
     for (i = 0; i < GN_LANES; i++)
         if (ui.lane_toast[i]) {
-            const char *q = ui.lane_toast_q[i] == Q_PERFECT ? "PERFECT" : "GOOD";
+            uint32_t qq = ui.lane_toast_q[i];
+            const char *q = qq == Q_PERFECT ? "PERFECT" : qq == Q_GOOD ? "GOOD" : "OOPS";
             int32_t x = clamp(UI_LANE_X(i) - gfx_text_w(q, 0) / 2, 0, GFX_W - gfx_text_w(q, 0));
             gfx_text(x, 84 - (20 - (int32_t)ui.lane_toast[i]) / 2, q,
-                     ui.lane_toast_q[i] == Q_PERFECT ? GN_C_WHITE : GN_C_YELLOW, 0);
+                     qq == Q_PERFECT ? GN_C_WHITE : qq == Q_GOOD ? GN_C_YELLOW : GN_C_RED, 0);
         }
     if (ui.now < ui.card_until && s->section == SEC_INTRO) {   /* the title card */
         const char *name = GN_STAGES[ui.card_stage % GN_NSTAGES].name;

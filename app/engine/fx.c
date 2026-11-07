@@ -31,6 +31,9 @@ typedef char fx_rv_check[RV_TOTAL == FX_RV_TOTAL ? 1 : -1];   /* fx.h's FX_BYTES
 static float *ens_l, *ens_r;
 static uint32_t ens_pos;
 static float ens_ph1, ens_ph2;
+static float ens_dl = -1.0f, ens_dr, ens_g;   /* the read distances and the wet's gate, slewed: a mode change or the
+                                               * switch off would jump the read point (a click) */
+static uint32_t ens_shape = ENS_CHORUS1;      /* the last mode on: its shape stays while the ensemble fades out */
 
 /* The delay: two legs on one 16-bit buffer (left, then right), the input into the left, each leg's repeat crossing
  * into the other with the feedback, the right leg dly_ratio times the left (1.382 in DEEP FIELD so the sides never
@@ -236,17 +239,17 @@ void fx_pre(float *l, float *r, uint32_t n, const fx_params_t *p)   /* the ensem
     uint32_t i;
     float bus_pk = block_peak(l, r, n);  /* what the next stage gets: silence into a silent stage lets it rest */
     /* ensemble */
-    {
-        uint32_t ens_on = !(p->bypass & FX_BYP_ENS) && p->ens_mode != ENS_OFF && p->ens_mix > 0.001f;
-        if (bus_pk > 0.0f && ens_on)
-            ens_tail = ENS_LEN / n + 2u; /* its line holds the last 11.6 ms */
-        else if (ens_tail)
-            ens_tail--;
-    }
-    if (ens_tail) {
+    uint32_t ens_on = !(p->bypass & FX_BYP_ENS) && p->ens_mode != ENS_OFF && p->ens_mix > 0.001f;
+    if (p->ens_mode != ENS_OFF)
+        ens_shape = p->ens_mode;
+    if (bus_pk > 0.0f && ens_on)
+        ens_tail = ENS_LEN / n + 2u;     /* its line holds the last 11.6 ms */
+    else if (ens_tail)
+        ens_tail--;
+    if (ens_tail || (!ens_on && ens_g > 0.0f)) {
         float inc1 = 0.513f / FS, inc2 = 0.863f / FS, depth, base = 0.0035f * FS, wet = 0.8f * fm_sqrtf(p->ens_mix),
-              dry = 1.0f - 0.4f * p->ens_mix;   /* heard from the first turn: the wet rises as a square root */
-        depth = (p->ens_mode == ENS_CHORUS1 ? 0.0012f : p->ens_mode == ENS_CHORUS2 ? 0.0018f : 0.0015f) * FS;
+              dry = 1.0f - 0.4f * p->ens_mix, g_to = ens_on ? 1.0f : 0.0f;   /* the wet rises as a square root */
+        depth = (ens_shape == ENS_CHORUS1 ? 0.0012f : ens_shape == ENS_CHORUS2 ? 0.0018f : 0.0015f) * FS;
         for (i = 0; i < n; i++) {
             float m, dl, dr, wl, wr;
             uint32_t b0;
@@ -256,12 +259,23 @@ void fx_pre(float *l, float *r, uint32_t n, const fx_params_t *p)   /* the ensem
             ens_ph2 += inc2;
             if (ens_ph2 >= 1.0f)
                 ens_ph2 -= 1.0f;
-            m = p->ens_mode == ENS_CHORUS1 ? tri(ens_ph1) : p->ens_mode == ENS_CHORUS2 ? tri(ens_ph2)
-                                                                                       : 0.5f * (tri(ens_ph1) + tri(ens_ph2));
+            m = ens_shape == ENS_CHORUS1 ? tri(ens_ph1) : ens_shape == ENS_CHORUS2 ? tri(ens_ph2)
+                                                                                   : 0.5f * (tri(ens_ph1) + tri(ens_ph2));
             ens_l[ens_pos] = l[i];
             ens_r[ens_pos] = r[i];
             dl = base + depth * m;
             dr = base - depth * m;
+            if (ens_dl < 0.0f) {         /* from rest: the line is silent, no glide needed */
+                ens_dl = dl;
+                ens_dr = dr;
+            }
+            ens_dl += (dl - ens_dl) * 0.001f;   /* about 23 ms: a slight bend, never a jump */
+            ens_dr += (dr - ens_dr) * 0.001f;
+            dl = ens_dl;
+            dr = ens_dr;
+            ens_g += (g_to - ens_g) * 0.003f;
+            if (!ens_on && ens_g < 0.0001f)
+                ens_g = 0.0f;
             b0 = (uint32_t)dl;
             {
                 uint32_t i0 = (ens_pos + ENS_LEN - b0) & (ENS_LEN - 1u), i1 = (i0 + ENS_LEN - 1u) & (ENS_LEN - 1u);
@@ -275,12 +289,13 @@ void fx_pre(float *l, float *r, uint32_t n, const fx_params_t *p)   /* the ensem
                 wr = ens_r[i0] + (ens_r[i1] - ens_r[i0]) * f;
             }
             ens_pos = (ens_pos + 1u) & (ENS_LEN - 1u);
-            l[i] = l[i] * dry + wl * wet;
-            r[i] = r[i] * dry + wr * wet;
+            l[i] = l[i] * (1.0f - (1.0f - dry) * ens_g) + wl * wet * ens_g;
+            r[i] = r[i] * (1.0f - (1.0f - dry) * ens_g) + wr * wet * ens_g;
         }
         pk_ens = block_peak(l, r, n);
         bus_pk = pk_ens;
     } else {
+        ens_dl = -1.0f;
         float inc1 = 0.513f / FS, inc2 = 0.863f / FS;
         for (i = 0; i < n; i++) {        /* at rest or off: its LFOs keep time, sample by sample, and the line empties
                                           * (switched on again, it does not replay what passed when it went off) */

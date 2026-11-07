@@ -58,6 +58,7 @@ typedef struct {
     float ph1, ph2, phm, phs;            /* the two oscillators, the BELL's modulator, the PLUCK's sub */
     float ic1, ic2;                      /* the SVF */
     float amp, click, sour, wob_ph;      /* sour: samples left of the poison detune */
+    float w2;                            /* the second oscillator's weight 0..1, slewed: switching it clicks */
     bd_env_t aenv, fenv;
 } bd_lead_t;
 
@@ -72,7 +73,7 @@ typedef struct {
 } bd_bass_t;
 
 typedef struct {
-    uint8_t active, gate, note, vel, style, pad[3];
+    uint8_t active, gate, note, vel, style, self, pad[2];
     uint32_t age;
     float pitch, penv, ph1, ph2, php, amp;
     bd_env_t aenv;
@@ -114,7 +115,7 @@ typedef struct {                         /* what a control tick settles for ever
     float ring_a, ring_cw, ring_sw;
     float crush_inc, crush_q, lcrush_inc, lcrush_q, dcrush_inc, dcrush_q;
     uint32_t crush_on, lcrush_on, dcrush_on;
-    float filter, duck;
+    float filter, duck, tlp_a;           /* tlp_a: the trip's low-pass on BAND-WET, 0 open */
 } bd_blk_t;
 
 typedef struct {                         /* the second core's job: its own cache lines, nothing else on them */
@@ -135,6 +136,7 @@ typedef struct {
     bd_blk_t k;
     float ring_c, ring_s;                /* the ring modulator's carrier, a rotating pair */
     float dj_ic1[2], dj_ic2[2];
+    float tlp[4];                        /* the trip's low-pass: left, its second pole, right, its second pole */
     float st_fenv, st_ic1, st_ic2, st_pwm;   /* STAB: the shared filter's envelope and state, the hoover's PWM */
     float gain_now, pk[5];
     uint32_t rng, age, hall_n;
@@ -360,6 +362,31 @@ static void bd_tick_params(bd_t *b)
     k->lcrush_q = fm_exp2f(15.0f - 10.0f * c);
     k->filter = bd_cur[BP_FILTER];
     k->duck = bd_cur[BP_DUCK];
+    c = bd_cur[BP_TRIP];                 /* 20 kHz at 0 (a step nobody hears), 700 Hz at -1 */
+    k->tlp_a = c < -0.001f ? 1.0f - fm_exp2f(-9.0647f * 20000.0f * fm_exp2f(4.836f * c) * (1.0f / FS)) : 0.0f;
+}
+
+static void bd_trip_lp(bd_t *b, float a, uint32_t m, float *l, float *r)
+{
+    float l1 = b->tlp[0], l2 = b->tlp[1], r1 = b->tlp[2], r2 = b->tlp[3];
+    uint32_t j;
+    if (a <= 0.0f) {                     /* open: the poles follow the bus, so closing again starts where it is */
+        b->tlp[0] = b->tlp[1] = l[m - 1u];
+        b->tlp[2] = b->tlp[3] = r[m - 1u];
+        return;
+    }
+    for (j = 0; j < m; j++) {
+        l1 += a * (l[j] - l1);
+        l2 += a * (l1 - l2);
+        r1 += a * (r[j] - r1);
+        r2 += a * (r1 - r2);
+        l[j] = l2;
+        r[j] = r2;
+    }
+    b->tlp[0] = fm_flush(l1);
+    b->tlp[1] = fm_flush(l2);
+    b->tlp[2] = fm_flush(r1);
+    b->tlp[3] = fm_flush(r2);
 }
 
 /* ------------------------------------------------------------------ LEAD --- */
@@ -375,8 +402,9 @@ static void bd_lead_release(bd_lead_t *v)
 
 static void bd_lead_chunk(bd_lead_t *v, const bd_blk_t *k, uint32_t m, float *out)
 {
-    float pitch, inc1, inc2, fc, a1, a2, a3, tgt, step, d1 = 0.0f, d2 = 0.0f, mul = 1.0f, idx = 0.0f, g2 = 1.0f, ad;
+    float pitch, inc1, inc2, fc, a1, a2, a3, tgt, step, d1 = 0.0f, d2 = 0.0f, mul = 1.0f, idx = 0.0f, ad;
     float ph1 = v->ph1, ph2 = v->ph2, phm = v->phm, phs = v->phs, ic1 = v->ic1, ic2 = v->ic2, amp = v->amp;
+    float w2, w2_to, w2_step;
     uint32_t j, two, patch = v->patch;
     ad = v->soft ? bdc.ad120 : k->l_ad;
     bd_env_tick(&v->aenv, bdc.aa2, ad, 0.5f, k->l_ar);
@@ -411,9 +439,12 @@ static void bd_lead_chunk(bd_lead_t *v, const bd_blk_t *k, uint32_t m, float *ou
         d2 = 0.7f * s;
         mul = 1.0f + s;
     }
-    two = k->l_det > 0.0005f || d2 != 0.0f;
-    if (two)
-        g2 = 0.71f;
+    w2 = v->w2;
+    w2_to = k->l_det > 0.0005f || d2 != 0.0f ? 1.0f : 0.0f;
+    w2_to = w2 + (w2_to - w2) * 0.25f;   /* about 3 ms to settle */
+    w2_to = w2_to < 0.001f ? 0.0f : w2_to > 0.999f ? 1.0f : w2_to;
+    w2_step = (w2_to - w2) / (float)m;
+    two = w2 > 0.0f || w2_to > 0.0f;
     inc1 = bd_hz(pitch + d1) * (1.0f / FS);
     inc2 = bd_hz(pitch + k->l_det + d2) * (1.0f / FS);
     inc1 = inc1 > MAX_INC ? MAX_INC : inc1;
@@ -427,7 +458,7 @@ static void bd_lead_chunk(bd_lead_t *v, const bd_blk_t *k, uint32_t m, float *ou
     tgt = v->aenv.level * (float)v->vel * (1.0f / 127.0f) * k->l_lvl * BD_LEAD_TRIM[patch] * mul;
     step = (tgt - amp) / (float)m;
     for (j = 0; j < m; j++) {
-        float x, bp, y;
+        float x, x2 = 0.0f, bp, y;
         ph1 = bd_wrap(ph1 + inc1);
         if (two)
             ph2 = bd_wrap(ph2 + inc2);
@@ -436,12 +467,12 @@ static void bd_lead_chunk(bd_lead_t *v, const bd_blk_t *k, uint32_t m, float *ou
             phs = bd_wrap(phs + 0.5f * inc1);
             x = bd_tri(ph1) + 0.5f * fm_sin_turns(phs);
             if (two)
-                x += bd_tri(ph2);
+                x2 = bd_tri(ph2);
             break;
         case LP_SQUARE:
             x = bd_pulse(ph1, inc1, 0.5f);
             if (two)
-                x += bd_pulse(ph2, inc2, 0.5f);
+                x2 = bd_pulse(ph2, inc2, 0.5f);
             break;
         case LP_BELL: {
             float md;
@@ -449,16 +480,18 @@ static void bd_lead_chunk(bd_lead_t *v, const bd_blk_t *k, uint32_t m, float *ou
             md = idx * fm_sin_turns(phm);
             x = fm_sin_turns(ph1 + md);
             if (two)
-                x += fm_sin_turns(ph2 + md);
+                x2 = fm_sin_turns(ph2 + md);
             break;
         }
         default:
             x = bd_saw(ph1, inc1);
             if (two)
-                x += bd_saw(ph2, inc2);
+                x2 = bd_saw(ph2, inc2);
             break;
         }
-        bd_svf(x * g2, &ic1, &ic2, a1, a2, a3, &bp, &y);
+        w2 += w2_step;
+        x = x * (1.0f - 0.29f * w2) + x2 * (0.71f * w2);   /* w2 1: both at 0.71, as the pair always summed */
+        bd_svf(x, &ic1, &ic2, a1, a2, a3, &bp, &y);
         amp += step;
         out[j] += y * amp;
     }
@@ -469,6 +502,7 @@ static void bd_lead_chunk(bd_lead_t *v, const bd_blk_t *k, uint32_t m, float *ou
     v->ic1 = fm_flush(ic1);
     v->ic2 = fm_flush(ic2);
     v->amp = amp;
+    v->w2 = w2_to;
 }
 
 static bd_lead_t *bd_lead_pick(bd_t *b, uint32_t note)
@@ -496,6 +530,9 @@ static void bd_lead_on(bd_t *b, uint32_t note, uint32_t vel, uint32_t flags)
         if (b->lead[i].active && b->lead[i].gate && (!held || b->lead[i].age > held->age))
             held = &b->lead[i];
     v = bd_lead_pick(b, note);
+    if ((flags & BN_SOFT) && v->active && v->gate && v->note == note && !v->soft)
+        return;                          /* the guide or an air note on an eaten note still sounding: it would
+                                          * retrigger the eat at the soft level (an early eat lost its accent) */
     if (v->active && v->gate)
         bd_midi_send(0, v->note, 0, 0);  /* stolen, or the same note again: its off first */
     if (!v->active) {                    /* a fresh start; a retrigger keeps its phases and filter (no click) */
@@ -506,6 +543,7 @@ static void bd_lead_on(bd_t *b, uint32_t note, uint32_t vel, uint32_t flags)
         v->amp = 0.0f;
         v->aenv.level = v->fenv.level = 0.0f;
         v->wob_ph = 0.0f;
+        v->w2 = bd_cur[BP_LEAD_DETUNE] > 0.0005f || (flags & BN_SOUR) ? 1.0f : 0.0f;
     }
     v->active = 1;
     v->gate = 1;
@@ -679,6 +717,8 @@ static void bd_stab_chunk(bd_t *b, bd_stab_t *v, const bd_blk_t *k, uint32_t m, 
     float ph1 = v->ph1, ph2 = v->ph2, php = v->php, amp = v->amp;
     uint32_t j, hoover = v->style == SS_HOOVER;
     bd_env_tick(&v->aenv, e->aa, e->own_ad ? e->ad : k->s_ad, e->sus, e->ar);
+    if (v->self && v->gate && v->aenv.stage == 3)
+        bd_stab_release(v);              /* BN_NOTEOFF_SELF: PAD and HOOVER sustain, so nothing else would end it */
     if (!v->aenv.stage) {
         bd_stab_release(v);
         v->active = 0;
@@ -717,7 +757,7 @@ static void bd_stab_chunk(bd_t *b, bd_stab_t *v, const bd_blk_t *k, uint32_t m, 
     v->amp = amp;
 }
 
-static void bd_stab_on(bd_t *b, uint32_t note, uint32_t vel)
+static void bd_stab_on(bd_t *b, uint32_t note, uint32_t vel, uint32_t flags)
 {
     bd_stab_t *v = 0;
     uint32_t i, style = bd_disc(BP_STAB_STYLE);
@@ -749,6 +789,7 @@ static void bd_stab_on(bd_t *b, uint32_t note, uint32_t vel)
     v->note = (uint8_t)note;
     v->vel = (uint8_t)vel;
     v->style = (uint8_t)style;
+    v->self = (flags & BN_NOTEOFF_SELF) != 0u;
     v->age = ++b->age;
     v->pitch = (float)note;
     v->penv = style == SS_HOOVER ? 9.0f : 0.0f;
@@ -1251,6 +1292,7 @@ static void bd_fx_params(bd_t *b)        /* this block's effect settings from th
     fx_params_t *p = &b->fxp;
     uint32_t div = bd_disc(BP_DLY_DIV), ens = bd_disc(BP_ENS);
     float bpm = bd_tgt[BP_TEMPO], space = bd_cur[BP_SPACE], t, mix = bd_cur[BP_ENS_MIX];
+    float hi = bd_cur[BP_TRIP] > 0.0f ? bd_cur[BP_TRIP] : 0.0f;   /* high on the trip: more space and sparkle */
     static const float DIV_BEATS[5] = {0.5f, 0.25f, 0.5f, 0.75f, 1.0f};
     if (div > 4u)
         div = 4u;
@@ -1268,12 +1310,12 @@ static void bd_fx_params(bd_t *b)        /* this block's effect settings from th
     p->dly_time_s = t < 0.05f ? 0.05f : t > 0.418f ? 0.418f : t;
     p->dly_ratio = 1.0f;
     p->dly_fdbk = bd_cur[BP_DLY_FDBK];
-    p->dly_send = bd_disc(BP_DLY_DIV) ? bd_clamp01(bd_cur[BP_DLY_SEND] + 0.4f * space) : 0.0f;
+    p->dly_send = bd_disc(BP_DLY_DIV) ? bd_clamp01(bd_cur[BP_DLY_SEND] + 0.4f * space + 0.08f * hi) : 0.0f;
     p->dly_diff = 0.35f;
     p->rev_decay = bd_cur[BP_REV_SIZE];
     p->rev_damp = bd_cur[BP_REV_DAMP];
-    p->rev_send = bd_clamp01(bd_cur[BP_REV_SEND] + 0.4f * space);
-    p->shimmer = bd_cur[BP_SHIMMER];
+    p->rev_send = bd_clamp01(bd_cur[BP_REV_SEND] + 0.4f * space + 0.08f * hi);
+    p->shimmer = bd_clamp01(bd_cur[BP_SHIMMER] + 0.12f * hi);
     p->freeze = bd_disc(BP_FREEZE);
     p->bypass = 0;
 }
@@ -1359,6 +1401,7 @@ static void bd_block(bd_t *b, int32_t *lr, uint32_t n, float gain)
         if (k->crush_on)
             bd_decim2(&b->dec_wet, cwl, cwr, m, k->crush_inc, k->crush_q);
         bd_stutter_chunk(b, m, cdl, cdr, cwl, cwr);
+        bd_trip_lp(b, k->tlp_a, m, cwl, cwr);
         if (k->lcrush_on)
             bd_decim1(&b->dec_lead, clm, m, k->lcrush_inc, k->lcrush_q);
         pk = b->pk[PART_LEAD];
@@ -1407,6 +1450,8 @@ static void bd_block(bd_t *b, int32_t *lr, uint32_t n, float gain)
         pk = a > pk ? a : pk;
         pk = c > pk ? c : pk;
         b->gain_now += (gain - b->gain_now) * 0.004f;   /* ~5 ms: turning MASTER does not click */
+        if (fm_fabsf(gain - b->gain_now) < 1.0f)       /* at MASTER 0 it would creep down into denormals */
+            b->gain_now = gain;
         lr[2u * i] = (int32_t)(wl[i] * b->gain_now);
         lr[2u * i + 1u] = (int32_t)(wr[i] * b->gain_now);
     }
@@ -1556,7 +1601,7 @@ void band_note_on(uint32_t part, uint32_t note, uint32_t vel, uint32_t flags)
     switch (part) {
     case PART_LEAD: bd_lead_on(bd, note, vel, flags); break;
     case PART_BASS: bd_bass_on(bd, note, vel, flags); break;
-    case PART_STAB: bd_stab_on(bd, note, vel); break;
+    case PART_STAB: bd_stab_on(bd, note, vel, flags); break;
     default: break;
     }
 }
@@ -1625,8 +1670,11 @@ void band_stutter(uint32_t div, uint32_t repeats)
     if (div == 0u)
         div = 16u;
     len = (uint32_t)(FS * 240.0f / (bd_tgt[BP_TEMPO] * (float)div) + 0.5f);   /* a 1/div note */
-    while (len > RING - RING_FADE - 1u)  /* too slow for the ring: the next division up stays on the grid */
+    while (len > RING - RING_FADE - 1u) {   /* too slow for the ring: the next division up stays on the grid, twice
+                                             * as many repeats so the roll still lasts as long */
         len /= 2u;
+        repeats *= 2u;
+    }
     len = len < 2u * RING_FADE ? 2u * RING_FADE : len;
     if (s->on && !s->ending) {           /* retriggered mid-repeat: the slice is cut again from what the ring holds,
                                           * the fade out of what was playing */
@@ -1667,6 +1715,7 @@ void band_set(uint32_t p, float v)
     case BP_FREEZE: v = v >= 0.5f ? 1.0f : 0.0f; break;
     case BP_LEAD_TONE:
     case BP_SPACE:
+    case BP_TRIP:
     case BP_FILTER: v = fm_clampf(v, -1.0f, 1.0f); break;
     case BP_PITCH: v = fm_clampf(v, -24.0f, 24.0f); break;
     case BP_TEMPO: v = fm_clampf(v, 40.0f, 300.0f); break;

@@ -33,6 +33,14 @@ This file is the contract between the modules in prose. `gn.h` is the same contr
   between the neighbouring lanes' notes (`music_spice_note`), short, on LEAD. They never eat.
 - A key press always sounds its lane's note on the LEAD part: a short soft note when nothing was eaten (air), a full
   accented note when something was. Idle play is still an instrument over the backing. Air never breaks the combo.
+- A wrong key (a "clam"): a lane key or MIDI lane note that eats nothing while a melody mushroom in another lane is
+  inside its GOOD window, or within 110 ms of the hit of one a key just ate in another lane (so a slap of every key
+  is caught whichever key lands first). It plays a short sour note instead of the air note, ends the combo, costs a
+  third of the stage's `miss_trip`, and shows OOPS over the lane. CHORD's and WIDE's extra lanes are judged first
+  (their eat is the press's), FREEZE has no timing to be wrong about, and the air keys and black keys never clam.
+  Measured at stage 1: a player who presses every mushroom's key on time and adds a neighbour each time keeps every
+  eat but scores 29 %; slapping all seven keys every 125 ms (which used to clear the stage with a full combo) comes
+  down in about two seconds; free notes between the mushrooms cost nothing.
 - MIDI in (any channel) plays the same way: a note's pitch class picks the lane (C D E F G A B), its octave the
   register (48..59 low, 60..71 middle, 72..83 high), black pitch classes are spice.
 
@@ -71,7 +79,9 @@ Species (`SP_*`) and what eating does:
 | PUFFBALL | grey ball | the note; BURP into the stash |
 | BOSS (The Big One) | three lanes wide, 51×24, three bite states | see Boss |
 
-A stashable eaten with the stash full replaces slot 0 and the others shift down. Porcini are the tune: every
+The stash's slots are fixed to their keys: a stashable fills the lowest empty slot, with the stash full it replaces
+the oldest pickup in that pickup's own slot, and using one empties only its slot, so an ability never moves to
+another key. Porcini are the tune: every
 melody note of the stage's tune at its time, thinned by two rules into AUTO notes (`GN_SPAWN_AUTO`, no mushroom,
 played by LEAD at its time if the previous melody note was eaten, never missed): the stage's `density` grid (1
 every note, 2 only onsets on the 8th grid, 4 only onsets on the beat) and `min_gap_ms` (a note closer than that to
@@ -82,8 +92,9 @@ between when you eat. The other species replace a porcini (keeping its note) on 
 stage 1, so the first two abilities a player meets are the legible ones; then by `stash_w`); death caps
 `deathcap_q / 4` a bar from stage 1 on, at a random step, in a lane with no melody spawn within ±1 beat and not the
 lane the player pressed in the last beat (skipped, not deferred, when no lane qualifies). Honey fungus chains: six
-or more consecutive melody notes each two 16ths or shorter with no rest between (capped at eight) share a `chain`
-id; eating every one pays a bonus and a drum fill.
+or more consecutive melody notes each two 16ths or shorter with no rest between (capped at eight, at least four of
+them on the stage's density grid, and none starting within a bar of the last chain's end, so a stream of 16ths
+chains every few bars, not end to end) share a `chain` id; eating every one pays a bonus and a drum fill.
 
 ### Abilities (the stash, `AB_*`, durations `GN_ABILITY_BARS`)
 
@@ -115,12 +126,18 @@ slot keeps it); BURP is instant and always works.
   level is clamp(trip, 0, 999) / 100 (0..9) and sets the baseline visual and sound intensity within a stage.
   PERFECT +30, GOOD +20, air 0, miss −`miss_trip` (30, 30, 45, 45, 60, 60, 60, 60 by stage), death cap
   −`poison_trip` (0, 80, 80, 90, 90, 100, 100, 100), agaric +100, boss chomp +30, boss landed −(3 − bites) × 40
-  from stage 1. From stage 2 it decays trip_level / 3 a beat (nothing under 300, 3 a beat above 900), so holding
+  from stage 1, a wrong key −`miss_trip` / 3. From stage 2 it decays trip_level / 3 a beat (nothing under 300, 3 a beat above 900), so holding
   the top takes playing. At or below 0 the gnome comes down: GAME OVER ("YOU CAME DOWN"). In JAM the meter runs as
   usual but at 0 it refills to 400 with a WOBBLE (a lurch and a sour cluster) instead of ending.
+- The band hears the trip (`BP_TRIP`, slewed over 0.8 s): from 400 down to 100 a low-pass on the band bus closes
+  from 20 kHz to 700 Hz, the hats and shaker drop out from about 250 and the stabs and pads from about 160 (each at a
+  bar line), until the kick, the bass and the player's own notes are left; from 700 up to 900 the delay and hall
+  sends rise by 0.08 and the shimmer by 0.12. Between 400 and 700 the band is as the stage sets it. The lead, the
+  bass and the kick never change with it, so the player always hears what they play.
 - Score: PERFECT 15, GOOD 10, ARP auto-eat and BURP eats 5, a chain complete +50, a boss chomp 30, boss eaten
   +200. Each is multiplied by the combo multiplier (1 + combo / 8, at most 4), by the stage number (index + 1;
-  endless 8), and by 2 under SHIMMER. Combo counts consecutive eats; a miss or a death cap ends it, air does not.
+  endless 8), and by 2 under SHIMMER. Combo counts consecutive eats; a miss, a death cap or a wrong key ends it, air
+  does not.
   A full stage-7 run stays under 999,999, the HUD's six digits.
 - The high score counts only runs started at stage 0; a run started later is PRACTICE (shown in the HUD, no high
   score). High score, furthest stage, hat, JAM, flash and Bluetooth settings are saved at GAME OVER (in the
@@ -143,12 +160,12 @@ up).
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 (0) | FOREST FLOOR | In the Hall of the Mountain King (Grieg 1875) | FOLK: pizzicato PLUCK lead, soft root-motion bass, brush kit, a low pad with the build; a quiet guide LEAD carries the tune | 88→100 | dorian (its ♯4 kept by alteration) | 1 / 280 | daylight forest, green and brown, calm |
 | 2 (1) | SPORE DRIFT | Korobeiniki (Russian folk) | HOUSE: four-on-the-floor kick, offbeat open hats, clap on 2 and 4, piano stabs, filtered bass; the guide LEAD still on | 112→118 | natural minor | 1 / 220 | dusk, saturating colours, first slow wave |
-| 3 (2) | CAP OPENING | Canon in D (Pachelbel, c. 1680), in C | DEEP HOUSE: shuffled hats, sidechain pump on 7th/9th pad chords, bass with filter movement | 124→126 | major | 1 / 200 | night, colour cycling on the sky, spores drifting |
+| 3 (2) | CAP OPENING | Canon in D (Pachelbel, c. 1680), in C | DEEP HOUSE: shuffled hats, sidechain pump on 7th/9th pad chords, bass with filter movement | 124→126 | major | 1 / 250 | night, colour cycling on the sky, spores drifting |
 | 4 (3) | RED SPOTS | Hungarian Dance No. 5 (Brahms 1869) | ACID: 303 bass with accents and slides, resonance sweeps, a saw lead through a wet filter | 128→134 | natural minor | 1 / 200 | wave on both axes of the background, red and orange, lanes breathing |
 | 5 (4) | THE WAVY BIT | Symphony No. 5, first movement (Beethoven 1808) | RAVE: hard kick, hoover stabs, open hats, risers into the drops | 136→140 | natural minor | 1 / 180 | kaleidoscope on, heavy wave, palette rotating |
 | 6 (5) | KALEIDOSCOPE | Rondo alla Turca (Mozart 1783) | BREAKS: broken beats, snare rolls, bit-crushed hats, syncopated bass | 138→144 | natural minor | 2 / 180 | four-way mirror, bending lanes, trails |
-| 7 (6) | SPIRAL EYES | Flight of the Bumblebee (Rimsky-Korsakov 1900) | IDM: stutter retriggers, a 7/8 bar every fourth bar, ring modulation on the wet bus, glitch kit; LEAD buzzes the chromatic 16ths between the beat mushrooms | 146→152 | natural minor (chromatic by alteration) | 4 / 170 | eyes in the sky, a strobe on beat 1, zoom pulses |
-| 8 (7) | ENLIGHTENMENT | Infernal Galop, the Can-Can (Offenbach 1858) | HARD: 160 BPM gabber kick, everything on, shimmer | 158→168 | major, the mode rotating every 4 bars | 4 / 170 | full chaos in the background, the field still crisp |
+| 7 (6) | SPIRAL EYES | Flight of the Bumblebee (Rimsky-Korsakov 1900) | IDM: stutter retriggers, a 7/8 bar every fourth bar, ring modulation on the wet bus, glitch kit; LEAD buzzes the chromatic 16ths between the beat mushrooms | 146→152 | natural minor (chromatic by alteration) | 2 / 170 | eyes in the sky, a strobe on beat 1, zoom pulses |
+| 8 (7) | ENLIGHTENMENT | Infernal Galop, the Can-Can (Offenbach 1858) | HARD: 160 BPM gabber kick, everything on, shimmer | 158→168 | major, the mode rotating every 4 bars | 2 / 170 | full chaos in the background, the field still crisp |
 
 The trip is "wavy and colourful at a bunch of points": besides the per-stage baseline, every fly agaric is a 4-bar
 burst, every ability has its own look (ARP lasers, SLOW melt, FREEZE crystals and blue, SHIMMER rainbow, BURP
@@ -327,9 +344,10 @@ declares everything `static const`. Its inventory, by name (sizes in buffer pixe
 | Rows | What |
 | --- | --- |
 | 0–9 | HUD: SCORE (left, 6 digits in 6×8), the TRIP bar (centre, 36 px, filled from the effect ramp by level, red blinking under 200), the stage digit (right; PRACTICE / DEMO / CPU badges when they apply) |
-| 10–95 | the field: seven lanes 17 px wide from x = 0 (lane C) to x = 118; lane guides as faint dotted lines; the spawn row is 10, the mouth line y = 96 |
+| 10–16 | in a run, the message line: what a knob or button did, the ability used, WAIT, CHAIN +50, CHOMP!, WOBBLE, on a night strip under the HUD (the PRACTICE / DEMO badge gives way to it); on the title, the pause and GAME OVER a message is a box over the field's middle instead. Nothing is written over the field's lower part in play but PERFECT / GOOD / OOPS over a lane |
+| 10–95 | the field: seven lanes 17 px wide from x = 0 (lane C) to x = 118; lane guides as faint dotted lines; the spawn row is 10, the mouth line y = 96. From stage 4 (the plasma themes) a dark track 11 px wide stands behind each lane (every other pixel night on the field layer) so the mushrooms read over the colour; the 6 px between tracks show it whole. AUTO notes are drawn as the outline of their mushroom in light grey, never filled, so they never read as something to eat |
 | 96–111 | the gnome (16 wide, 20 tall, feet at 112), standing in the lane of the last press (he dashes 1 frame per lane); the mouth is at y = 96 |
-| 112–119 | the ground row: the stash as three 7-px icons at the left, the lane letters C D E F G A B under the lanes at stages 0–2 (and always while the furthest stage saved is 0), the combo at the right |
+| 112–119 | the ground row: the stash as three 7-px icons at the left, the lane letters C D E F G A B under the lanes at stages 0–2 (and always while the furthest stage saved is 0; light grey with a night shadow, legible on every floor), the combo at the right |
 
 The background layer by stage theme: a sky gradient (ramp A) with stars or eyes, a tree line and the toadstool
 house at stages 0–2, clouds drifting, a plasma from `gfx_sin` at stage 4 and up, the ground (ramp B). Mushrooms are
@@ -472,19 +490,31 @@ Each tune: name, mode (7 semitone offsets), bars, `gn_note_t { deg (degree 1..7 
 rest); oct −1..2; dur in 16ths }`, and `chord[bars]` (root degree with GN_CH_MINOR / GN_CH_MAJOR). Transcribed
 diatonically in the tune's own mode with alterations where the tune needs them (Mountain King's ♯4, Korobeiniki's
 raised 7th on the V chord, Bumblebee's chromatic runs); only ornaments are snapped. Recognisable at tempo is the
-bar. Pieces written in 2/4 take two bars per 4/4 bar. The nine: TUNE_MOUNTAIN (Grieg, dorian, 16 bars),
-TUNE_KOROBEINIKI (natural minor, 16), TUNE_CANON (Pachelbel, major, 16: the I V vi iii IV I IV V loop twice),
-TUNE_HUNGARIAN (Brahms, natural minor, 16), TUNE_FATE (Beethoven 5, natural minor, 16: the motif, its fermatas,
-the running 8ths), TUNE_TURCA (Mozart, natural minor, 16), TUNE_BUMBLEBEE (natural minor with alterations, 16),
-TUNE_CANCAN (Offenbach, major, 16), TUNE_FUNERAL (Chopin, natural minor, 4, GAME OVER).
+bar. Pieces written in 2/4 take two bars per 4/4 bar. The nine: TUNE_MOUNTAIN (Grieg, dorian, 16 bars: the
+theme's second bar ♯4 2 ♯4 | 4 ♭2 4, the answer a fifth up, both again an octave higher), TUNE_KOROBEINIKI
+(natural minor, 16: the A strain's two halves twice), TUNE_CANON (Pachelbel, major, 16: the I V vi iii IV I IV V
+loop twice; the first violin's three entries in quarters, the same three in eighths, then the eighth-note
+variations), TUNE_HUNGARIAN (Brahms, natural minor, 16), TUNE_FATE (Beethoven 5, natural minor, 16: the motif, its
+fermatas, the running 8ths), TUNE_TURCA (Mozart, natural minor, 16: the turns climb to the octave, B A G♯ A twice
+high before the high C), TUNE_BUMBLEBEE (natural minor with alterations, 16), TUNE_CANCAN (Offenbach, major, 16:
+the Can-Can's own strain, C | D F E D | G G | G A E F | D D | D F E D | C C' B A | G F E D and again to C G D E C,
+then the galloping strain), TUNE_FUNERAL (Chopin, natural minor, 4, GAME OVER).
 
 The stage table `GN_STAGES[8]` (`gn_stage_t`): the table in section 1 plus fall_q 8 8 8 8 9 10 10 10; density 1 1
-1 1 1 2 4 4; min_gap_ms 280 220 200 200 180 180 170 170; intro_bars 2 2 4 4 4 4 4 4; guide 1 1 0 0 0 0 0 0;
+1 1 1 2 2 2; min_gap_ms 280 220 250 200 180 180 170 170 (1.5× over TUNE's first two bars and 1.25× over the next
+two: an on-ramp after each INTRO); intro_bars 2 2 4 4 4 4 4 4; guide 1 1 0 0 0 0 0 0;
 miss_trip and poison_trip as section 1; agaric_bars 8; stash_bars 6 6 6 8 8 8 8 8; first_stash BURP WIDE then
 AB_NONE; stash_w by stage (early stages favour SLOW, WIDE, CHORD; late stages ARP, ECHO, SHIMMER, FREEZE, BURP;
-every weight nonzero); deathcap_q 0 4 4 6 8 8 10 12; ens 0 30 40 20 50 20 30 60; dly_send 10 20 30 35 30 40 50 50;
+every weight nonzero); deathcap_q 0 4 4 6 8 8 8 12; ens 0 30 40 20 50 20 30 60; dly_send 10 20 30 35 30 40 50 50;
 rev_send 25 20 25 20 30 20 30 45; shimmer 0 0 0 0 10 0 20 40; crush 0 0 0 0 10 25 40 30; ring 0 0 0 0 0 0 25 35;
 stutter 0 0 0 10 20 40 70 60; duck 0 35 60 30 50 20 30 70.
+
+Measured under the autoplayer (mushrooms to press a second over TUNE; death caps a second after the slash; the
+busiest two seconds in brackets), stage 1 to 8: 2.25 / 0 (3.5), 2.04 / 0.39 (3.0), 2.06 / 0.46 (2.5), 2.36 / 0.68
+(4.5), 2.37 / 1.04 (4.0), 3.16 / 1.07 (5.0), 4.02 / 1.12 (5.5), 3.76 / 1.84 (6.0). The tunes set the ceiling: the
+first five play every note they have (the Canon's eighths alternate with AUTO notes), so their step is the tempo,
+the guide leaving at stage 3, the death caps and the miss cost; the last three are where the presses climb, and the
+finale has the busiest passage, the most death caps and the fastest tempo.
 
 ## 5. Data crossing contexts (gn.h is the spec; this is the summary)
 
@@ -509,7 +539,7 @@ stutter 0 0 0 10 20 40 70 60; duck 0 35 60 30 50 20 30 70.
   gnomnom/build/host`. Deterministic (the run's seed is fixed in the simulator). `app_expect` names: state,
   section, stage (0..7), round, score, trip, triplevel, combo, hiscore, jam, practice, bpm, bar, gnomelane,
   ability, abilitybars, bosson, bossbites, auto, countin, stash0..2, mush, eaten, missed, poisoned, perfect,
-  spawned, air, chains, chomps, nexthit, nextlane, voices, peakN (part N, PART_COUNT the drums), peakout,
+  spawned, air, chains, chomps, clams, nexthit, nextlane, voices, peakN (part N, PART_COUNT the drums), peakout,
   furthest, hat, flash, dirty. Host commands (prefix `gn`): `gn auto N`, `gn autooff`, `gn demo 0|1`, `gn stage N`
   (1..8 as printed: the title's pick, past the furthest reached), `gn seed N`.
 - Web: `./build.sh gnomnom --web`, served by `.claude/launch.json` "gnomnom-emu" on port 8766; the page's

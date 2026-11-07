@@ -79,10 +79,10 @@ whatever the background does.
 | Part | What it shows |
 | --- | --- |
 | Top row | The score (six digits), the TRIP bar (red and blinking under 200), S and the stage number (a + after it in the endless rounds), and CPU in red for two seconds if the sound ever ran out of time. Just under it, PRACTICE when the run started past stage 1 (no high score) and DEMO while the attract plays. |
-| The field | Seven lanes 17 pixels wide, C at the left to B at the right, with faint dotted guides between them and the dotted mouth line near the bottom. Mushrooms fall straight down their lane and are eaten on the line; a ghost outline is a note the band plays by itself. The boss spans three lanes with a beam down each and a yellow mark on the line. PERFECT and GOOD rise over a lane as you eat; a grey splat marks a miss; a ring at the line is a note the band played on its own. The stage's card (STAGE n and its name) shows for the first two bars of its intro, THE BIG ONE when the boss comes, CLEAR with EATEN, MISSED and BEST COMBO at the end of each stage. |
+| The field | Seven lanes 17 pixels wide, C at the left to B at the right, with faint dotted guides between them and the dotted mouth line near the bottom. Mushrooms fall straight down their lane and are eaten on the line; a grey outline is a note the band plays by itself, never something to eat. From stage 5 a dark track runs behind each lane so the mushrooms stand out from the colour. The boss spans three lanes with a beam down each and a yellow mark on the line. PERFECT and GOOD rise over a lane as you eat, OOPS in red on a wrong key; a grey splat marks a miss; a ring at the line is a note the band played on its own. The stage's card (STAGE n and its name) shows for the first two bars of its intro, THE BIG ONE when the boss comes, CLEAR with EATEN, MISSED and BEST COMBO at the end of each stage. |
 | The gnome | Stands in the lane you pressed last and dashes a lane a frame to the next. His mouth opens when a mushroom is close, he bites when he eats, winces when he misses, swells under WIDE, goes spiral-eyed with his hat flying when the trip is high, and lies down at the end. His hat's colour is yours (KNOB 4). |
 | The ground row | The three stash slots at the left (an icon in each loaded one, popping as it loads), the running ability's icon with a bar of its bars left, and the combo at the right (X4 and up, yellow from X16). The lane letters sit above it at stages 1 to 3, and always until you have reached stage 2. |
-| Toasts | A box in the middle of the field says what a button or knob did, the ability you used, WAIT when one is refused, CHAIN +50, CHOMP!, WOBBLE, SAVED. It stays 1.3 seconds. |
+| Toasts | In play, a line just under the top bar says what a button or knob did, the ability you used, WAIT when one is refused, CHAIN +50, CHOMP!, WOBBLE, so nothing covers the mushrooms; on the title, the pause and GAME OVER it is a box in the middle (SAVED, the settings). It stays 1.3 seconds. |
 
 **The key lights.** In a run a lane's keys (its middle and high register keys, C4 to B4 and C5 to G5) are off
 while nothing falls in that lane, **mid** from the moment a mushroom appears and **bright** for the last beat of
@@ -162,6 +162,11 @@ F3 G3 A3 B3 play their letter's note low and never eat, so the left hand owns th
 nothing dangerous. Any key press always sounds: a quiet short note when nothing was there (air), a full accented
 one when something was eaten. Air never breaks a combo.
 
+A lane key that eats nothing while a mushroom is due in another lane is a wrong key: OOPS rises over the lane, a
+short sour note plays, the combo ends and the trip drops a third of a miss. Two keys for one mushroom count too, so
+slapping every key does not pay. Playing between the mushrooms stays free, and under CHORD and WIDE a press that
+their extra lanes turn into an eat is never wrong.
+
 MIDI notes play the lanes the same way: the pitch class picks the lane, the octave the register (48 to 59 low, 60
 to 71 middle, 72 to 83 high), black pitch classes are spice.
 
@@ -191,8 +196,8 @@ mushroom per lane. A mushroom more than 110 ms past the line is missed.
 
 At the early stages every note of the tune is a mushroom; later only the notes on the 8th grid or on the beat
 are, and the lead buzzes the notes between by itself when you ate the one before (the ghost outlines falling
-with the real ones). A run of six or more quick notes shares a chain: eat them all and CHAIN +50 pays a bonus
-with a drum fill. A stashable mushroom replaces an ordinary note every few bars; a death cap falls in an empty
+with the real ones). A run of six or more quick notes shares a chain (at most one starting a bar after the last):
+eat them all and CHAIN +50 pays a bonus with a drum fill. A stashable mushroom replaces an ordinary note every few bars; a death cap falls in an empty
 lane, never the lane you just pressed in.
 
 ---
@@ -200,7 +205,8 @@ lane, never the lane you just pressed in.
 ## 7. The stash and the abilities
 
 Eating a stashable mushroom loads its ability into the first free slot of three (the black keys F♯3 G♯3 A♯3,
-lit while loaded, shown bottom left). A fourth replaces the oldest. Press the key to use it. One timed ability runs
+lit while loaded, shown bottom left). A fourth replaces the oldest, in that one's slot. Press the key to use it:
+its slot empties and the others stay on their keys, so what you saved on G♯3 is still on G♯3. One timed ability runs
 at a time; pressing another while one runs says WAIT and keeps it. BURP is instant and always works.
 
 | Ability | From | Lasts | What it does |
@@ -221,15 +227,17 @@ at a time; pressing another while one runs says WAIT and keeps it. BURP is insta
 **TRIP** runs 0 to 1000 and is the bar at the top. It starts at 400 and is lifted to at least 400 at every stage's
 intro. PERFECT +30, GOOD +20, air 0; a miss costs 30 at the first two stages, 45 at the next two, 60 from stage 5;
 a death cap 80 to 100; a fly agaric +100; a boss chomp +30; a boss that lands costs 40 for every bite you did not
-take (not at stage 1). From stage 3 it also decays a little every beat when it is above 300, faster the higher it
+take (not at stage 1); a wrong key a third of a miss. From stage 3 it also decays a little every beat when it is above 300, faster the higher it
 is, so holding the top takes playing. At 0 the gnome comes down: YOU CAME DOWN. The trip's level (the hundreds)
-sets how deep the picture and the band go within a stage.
+sets how deep the picture goes within a stage, and the band listens too: below 400 it darkens, the hats drop out
+from about 250 and the chords from about 160, until only the kick, the bass and your own notes are left; above 700
+it opens into more echo, hall and shimmer. Your notes never change with it.
 
 **Score:** PERFECT 15, GOOD 10, an auto-eat or a BURP eat 5, a chain +50, a boss chomp 30, the boss eaten +200;
 each multiplied by the combo multiplier (1 + combo / 8, at most 4), by the stage number, and by 2 under SHIMMER.
 The HUD holds six digits.
 
-**Combo** counts consecutive eats; a miss or a death cap ends it, air does not. It shows at the bottom right from
+**Combo** counts consecutive eats; a miss, a death cap or a wrong key ends it, air does not. It shows at the bottom right from
 X4, and at X16 a rainbow trail follows the gnome.
 
 The high score counts only runs started at stage 1. A run started later says PRACTICE.
@@ -350,7 +358,7 @@ the next N mushrooms at their hit ticks; 999 for the lot), `gn autooff`, `gn dem
 `gn stage N` (the title's start pick, 1 to 8, past the furthest reached) and `gn seed N` (the next run's seed), and
 checks named state, section, stage, score, trip, triplevel, combo, hiscore, jam, practice, bpm, bar, gnomelane,
 ability, abilitybars, bosson, bossbites, auto, countin, stash0..2, mush, eaten, missed, poisoned, perfect, spawned,
-air, chains, chomps, nexthit, nextlane, voices, peakN, peakout, furthest, hat, flash and dirty.
+air, chains, chomps, clams, nexthit, nextlane, voices, peakN, peakout, furthest, hat, flash and dirty.
 
 `./build.sh gnomnom --web` builds the browser emulator into `gnomnom/build/emu/`: the same code, with sound,
 played with the mouse or the computer keyboard (qwertyui and asdfghjk are the white keys, the digits the black
@@ -373,6 +381,8 @@ the high score, the start stage, JAM and FLASH). The words file is `words.tsv`.
 | Problem | Likely cause |
 | --- | --- |
 | A key eats nothing | Wrong register: F3 G3 A3 B3 never eat; the lanes are C4 to G5. Or you were more than 110 ms off: watch for the lane's key to go bright and press as the mushroom touches the line. |
+| OOPS on the screen | A wrong key: a lane pressed with nothing in it while a mushroom was due in another lane, or a second key with the right one. |
+| The band goes dull and thin | The trip is low (under 400): eat to bring it back. |
 | A black key does nothing | Only F♯3 G♯3 A♯3 are the stash, and only while lit. The other black keys play spice. |
 | WAIT on the screen | A timed ability is running; the one you pressed stays in its slot. |
 | The screen says PRACTICE | The run started past stage 1: no high score. OCT− on the title back to STAGE 1. |

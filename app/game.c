@@ -46,14 +46,17 @@ static uint32_t gm_stage, gm_round, gm_jam, gm_practice, gm_section;
 static int32_t gm_trip;
 static uint32_t gm_score, gm_combo, gm_st_eaten, gm_st_missed, gm_st_best_combo;
 static uint8_t gm_stash[GN_STASH];
+static uint32_t gm_stash_age[GN_STASH], gm_stash_n;   /* when each slot was filled: a full stash gives up its oldest */
 static uint32_t gm_ability, gm_ab_end, gm_ab_samples;
 static float gm_base_pitch, gm_base_filter, gm_base_detune, gm_base_shimmer, gm_base_dly_div, gm_base_dly_fdbk,
              gm_base_dly_send;
-static uint32_t gm_keys_last, gm_btn_last, gm_rng, gm_beat_last, gm_bar_seen, gm_sec_seen, gm_bar_tick;
+static uint32_t gm_keys_last, gm_rng, gm_beat_last, gm_bar_seen, gm_sec_seen, gm_bar_tick;
 static uint32_t gm_gnome_lane, gm_last_press, gm_last_melody_eaten, gm_voice_last = 255u;
 static int32_t gm_gnome_reg;
 static uint32_t gm_countin, gm_countin_left, gm_countin_spb, gm_hold_pause;
 static uint32_t gm_chain_cur, gm_chain_n, gm_chain_broken;
+static uint32_t gm_eat_hit = 0xFFFFFFFFu, gm_eat_lane;   /* the last melody mushroom a key ate: a clam's window */
+static float gm_trip_pull;               /* BP_TRIP, slewed */
 static uint32_t gm_ghost_tick[GM_GHOSTS], gm_ghost_n;
 static uint8_t gm_ghost_lane[GM_GHOSTS];
 static gm_pend_t gm_pend[GM_PEND];
@@ -173,16 +176,16 @@ static uint32_t gm_eat_note(const gm_mush_t *m, int32_t reg)
 }
 static void gm_stash_add(uint32_t ab)
 {
-    uint32_t s;
+    uint32_t s, k;
     for (s = 0; s < GN_STASH; s++)
         if (gm_stash[s] == AB_NONE)
             break;
-    if (s == GN_STASH) {
-        gm_stash[0] = gm_stash[1];
-        gm_stash[1] = gm_stash[2];
-        s = GN_STASH - 1u;
-    }
+    if (s == GN_STASH)                   /* full: the oldest goes, in its own slot, so the others keep their keys */
+        for (s = 0, k = 1; k < GN_STASH; k++)
+            if (gm_stash_age[k] < gm_stash_age[s])
+                s = k;
     gm_stash[s] = (uint8_t)ab;
+    gm_stash_age[s] = ++gm_stash_n;
     game_event_push(GE_STASH, s, ab, 0);
 }
 static void gm_eat(uint32_t i, uint32_t q, int32_t reg, uint32_t half)
@@ -265,6 +268,30 @@ static void gm_air(uint32_t note)
 {
     band_note_on(PART_LEAD, note, 60, BN_SOFT | BN_NOTEOFF_SELF);
     gm_cnt[GC_AIR]++;
+}
+static uint32_t gm_due_elsewhere(uint32_t lane, uint32_t t)   /* a melody mushroom due in another lane now, or one a
+                                          * key just ate there: a press that eats nothing then is a wrong key */
+{
+    uint32_t i, g, p;
+    if (gm_eat_hit != GM_NONE && gm_eat_lane != lane && gm_absdiff(t, gm_eat_hit) <= gm_ms_ticks(GN_WIN_GOOD_MS))
+        return 1;
+    for (i = 0; i < GN_MAX_MUSH; i++) {
+        const gm_mush_t *m = &gm_mush[i];
+        if (m->state != MS_FALLING || m->lane == lane || (m->flags & GN_SPAWN_AUTO) || m->species == SP_DEATHCAP)
+            continue;
+        gm_windows(i, &g, &p);
+        if (gm_absdiff(m->hit, t) <= g)
+            return 1;
+    }
+    return 0;
+}
+static void gm_clam(uint32_t lane, int32_t reg)
+{
+    band_note_on(PART_LEAD, music_lane_note(lane, reg), 80, BN_SOUR | BN_SOFT | BN_NOTEOFF_SELF);
+    gm_trip_add(-(int32_t)GN_STAGES[gm_stage].miss_trip / 3);
+    gm_combo = 0;
+    gm_cnt[GC_CLAMS]++;
+    game_event_push(GE_CLAM, lane, 0, 0);
 }
 static uint32_t gm_find(uint32_t lane, uint32_t t, uint32_t primary, uint32_t *q)
 {
@@ -361,11 +388,11 @@ static void gm_boss_press(uint32_t lane, uint32_t t)
 }
 
 /* ---- a lane press, at the block's start tick */
-static void gm_press_lane(uint32_t lane, int32_t reg, uint32_t t, uint32_t primary)
+static uint32_t gm_press_lane(uint32_t lane, int32_t reg, uint32_t t, uint32_t primary)   /* 1: it ate */
 {
-    uint32_t i, q, ate = 0;
+    uint32_t i, q, ate = 0, extra = 0;
     if (lane >= GN_LANES)
-        return;
+        return 0;
     if (primary) {
         gm_gnome_lane = lane;
         gm_gnome_reg = reg;
@@ -383,23 +410,30 @@ static void gm_press_lane(uint32_t lane, int32_t reg, uint32_t t, uint32_t prima
         if (i != GM_NONE) {
             gm_eat(i, q, reg, 0);
             ate = 1;
+            if (primary && gm_mush[i].species != SP_DEATHCAP) {
+                gm_eat_hit = gm_mush[i].hit;
+                gm_eat_lane = lane;
+            }
             if (gm_ability == AB_ECHO && primary)
                 gm_ghost_add(lane, t);
         }
     }
-    if (!ate && (primary || gm_ability == AB_CHORD))   /* CHORD's extra lanes sound the triad; WIDE's stay quiet */
-        gm_air(music_lane_note(lane, reg));
-    if (!primary)
-        return;
-    if (gm_ability == AB_CHORD) {
-        gm_press_lane((lane + 2u) % GN_LANES, reg + (lane + 2u >= GN_LANES ? 1 : 0), t, 0);
-        gm_press_lane((lane + 4u) % GN_LANES, reg + (lane + 4u >= GN_LANES ? 1 : 0), t, 0);
-    } else if (gm_ability == AB_WIDE) {
+    if (primary && gm_ability == AB_CHORD) {
+        extra |= gm_press_lane((lane + 2u) % GN_LANES, reg + (lane + 2u >= GN_LANES ? 1 : 0), t, 0);
+        extra |= gm_press_lane((lane + 4u) % GN_LANES, reg + (lane + 4u >= GN_LANES ? 1 : 0), t, 0);
+    } else if (primary && gm_ability == AB_WIDE) {
         if (lane > 0u)
-            gm_press_lane(lane - 1u, reg, t, 0);
+            extra |= gm_press_lane(lane - 1u, reg, t, 0);
         if (lane + 1u < GN_LANES)
-            gm_press_lane(lane + 1u, reg, t, 0);
+            extra |= gm_press_lane(lane + 1u, reg, t, 0);
     }
+    if (ate)
+        return 1;
+    if (primary && !extra && gm_ability != AB_FREEZE && gm_due_elsewhere(lane, t))
+        gm_clam(lane, reg);              /* judged after CHORD's and WIDE's lanes: their eat is the press's */
+    else if (primary || gm_ability == AB_CHORD)   /* CHORD's extra lanes sound the triad; WIDE's stay quiet */
+        gm_air(music_lane_note(lane, reg));
+    return 0;
 }
 static void gm_spice(uint32_t b)
 {
@@ -509,14 +543,12 @@ static void gm_burp(void)
 }
 static void gm_stash_use(uint32_t slot)
 {
-    uint32_t ab = gm_stash[slot], s;
+    uint32_t ab = gm_stash[slot];
     if (ab != AB_BURP && gm_ability != AB_NONE) {
         game_event_push(GE_REFUSED, ab, 0, 0);
         return;
     }
-    for (s = slot; s + 1u < GN_STASH; s++)
-        gm_stash[s] = gm_stash[s + 1u];
-    gm_stash[GN_STASH - 1u] = AB_NONE;
+    gm_stash[slot] = AB_NONE;
     game_event_push(GE_USE, ab, 0, 0);
     if (ab == AB_BURP)
         gm_burp();
@@ -685,6 +717,7 @@ static void gm_clear_run(void)
     gm_boss.on = 0;
     gm_ghost_n = 0;
     gm_pend_n = 0;
+    gm_eat_hit = GM_NONE;
 }
 static void gm_stop(void)
 {
@@ -782,6 +815,8 @@ static void gm_cmd(void)
                     music_hold(HOLD_PAUSE, 1);
                     gm_hold_pause = 1;
                 }
+                if (gm_ability == AB_FREEZE)   /* its stutter and frozen hall would sound through the pause */
+                    gm_ability_end();
                 band_all_off();
             }
             break;
@@ -805,12 +840,15 @@ static void gm_cmd(void)
     band_set(BP_LEAD_TONE, gn_cmd.tone);
     band_set(BP_SPACE, gn_cmd.space);
     v = gn_cmd.voice;
-    if (v != 255u) {
+    if (gm_state_v == GS_PLAY || gm_state_v == GS_PAUSE || gm_state_v == GS_ATTRACT) {   /* the title's music box
+                                          * and the march keep their bell */
         if (v < LP_COUNT)
             band_set(BP_LEAD_PATCH, (float)v);
-    } else if (gm_voice_last != 255u)    /* the knob let go of the patch: back to the stage's (the title's bell) */
-        band_set(BP_LEAD_PATCH, (float)(gm_state_v == GS_TITLE ? LP_BELL : GN_STAGES[gm_stage].lead));
-    gm_voice_last = v;
+        else if (gm_voice_last != 255u) /* the knob let go of the patch: back to the stage's */
+            band_set(BP_LEAD_PATCH, (float)GN_STAGES[gm_stage].lead);
+        gm_voice_last = v;
+    } else
+        gm_voice_last = 255u;
 }
 
 /* ---- the keys */
@@ -823,7 +861,7 @@ static uint32_t gm_in_run(uint32_t st) { return st == GS_PLAY || st == GS_ATTRAC
 static void gm_key_lane(uint32_t lane, int32_t reg, uint32_t now, uint32_t st)
 {
     if (gm_in_run(st)) {
-        gm_press_lane(lane, reg, now, 1);
+        (void)gm_press_lane(lane, reg, now, 1);
         return;
     }
     gm_gnome_lane = lane;                /* the title is an instrument too; the gnome follows the hand */
@@ -857,9 +895,20 @@ static void gm_pending(uint32_t now, uint32_t st)
 }
 
 /* ---- after music_tick: the hits that fell inside this block */
+static uint32_t gm_unjudged_before(uint32_t hit)   /* a melody mushroom due before this tick and not yet eaten or missed */
+{
+    uint32_t i;
+    for (i = 0; i < GN_MAX_MUSH; i++) {
+        const gm_mush_t *m = &gm_mush[i];
+        if ((m->state == MS_FALLING || m->state == MS_FROZEN) && !(m->flags & GN_SPAWN_AUTO)
+            && m->species != SP_DEATHCAP && (int32_t)(hit - m->hit) > 0)
+            return 1;
+    }
+    return 0;
+}
 static void gm_auto_tick(uint32_t before, uint32_t after)
 {
-    uint32_t i, bar;
+    uint32_t i, bar, s;
     for (i = 0; i < GN_MAX_MUSH; i++) {
         gm_mush_t *m = &gm_mush[i];
         if (m->state != MS_FALLING || (int32_t)(after - m->hit) <= 0)
@@ -868,7 +917,7 @@ static void gm_auto_tick(uint32_t before, uint32_t after)
             if (m->done)
                 continue;
             m->done = 1;
-            if (gm_last_melody_eaten) {
+            if (gm_last_melody_eaten && !gm_unjudged_before(m->hit)) {   /* the miss is judged 110 ms late */
                 band_note_on(PART_LEAD, m->note, 100, BN_NOTEOFF_SELF);
                 game_event_push(GE_NOTE, m->lane, 0, 0);
             }
@@ -903,8 +952,10 @@ static void gm_auto_tick(uint32_t before, uint32_t after)
         bar = music_bar();
         if (bar != gm_demo_bar_last) {
             gm_demo_bar_last = bar;
-            if ((bar & 7u) == 7u && gm_section == SEC_TUNE && gm_stash[0] != AB_NONE)
-                gm_stash_use(0);
+            for (s = 0; s < GN_STASH && gm_stash[s] == AB_NONE; s++)
+                ;
+            if ((bar & 7u) == 7u && gm_section == SEC_TUNE && s < GN_STASH)
+                gm_stash_use(s);
         }
     }
 }
@@ -987,7 +1038,7 @@ static void gm_snapshot(void)
     s->trip = (int16_t)gm_trip;
     s->score = gm_score;
     s->combo = gm_combo;
-    s->hiscore = !gm_practice && gm_score > gm_hiscore_saved ? gm_score : gm_hiscore_saved;
+    s->hiscore = !gm_practice && gm_state_v != GS_ATTRACT && gm_score > gm_hiscore_saved ? gm_score : gm_hiscore_saved;
     s->auto_left = gm_auto_left;
     s->st_eaten = (uint16_t)(gm_st_eaten > 65535u ? 65535u : gm_st_eaten);
     s->st_missed = (uint16_t)(gm_st_missed > 65535u ? 65535u : gm_st_missed);
@@ -998,18 +1049,32 @@ static void gm_snapshot(void)
 }
 
 /* ---- the render step */
+static void gm_trip_band(uint32_t n, uint32_t st)   /* the trip's pull on the band (BP_TRIP), slewed: a full swing in 0.8 s */
+{
+    float t = 0.0f, d, step = (float)n * (1.0f / (0.8f * GN_FS));
+    if (st != GS_PLAY && st != GS_PAUSE && st != GS_ATTRACT) {
+        gm_trip_pull = 0.0f;             /* the title and the march as they are */
+        band_set(BP_TRIP, 0.0f);
+        return;
+    }
+    if (gm_trip < 400)
+        t = (float)(gm_trip - 400) * (1.0f / 300.0f);
+    else if (gm_trip > 700)
+        t = (float)(gm_trip - 700) * (1.0f / 200.0f);
+    t = fm_clampf(t, -1.0f, 1.0f);
+    d = t - gm_trip_pull;
+    gm_trip_pull += d > step ? step : d < -step ? -step : d;
+    band_set(BP_TRIP, gm_trip_pull);
+}
 void game_tick(uint32_t n)
 {
-    uint32_t keys, btn, kedge, bedge, now, w, b, st;
+    uint32_t keys, kedge, now, w, b, st;
     gm_cmd();
     keys = plat_keys();
-    btn = plat_buttons();
     kedge = keys & ~gm_keys_last;
-    bedge = btn & ~gm_btn_last;
     gm_keys_last = keys;
-    gm_btn_last = btn;
     st = gm_state_v;
-    if (st == GS_ATTRACT && (kedge || bedge)) {
+    if (st == GS_ATTRACT && (kedge || gm_pend_n)) {   /* a button is the UI's to end it: it would act on the title */
         gm_stop();
         st = GS_TITLE;
         kedge = 0;
@@ -1035,6 +1100,7 @@ void game_tick(uint32_t n)
         gm_trip_check();
     } else if (st == GS_PAUSE && gm_countin)
         gm_countin_tick(n);
+    gm_trip_band(n, gm_state_v);
     music_tick(n);
     if (gm_in_run(gm_state_v))
         gm_auto_tick(now, music_now());
