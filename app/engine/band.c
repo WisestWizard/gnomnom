@@ -1321,9 +1321,12 @@ static void bd_fx_params(bd_t *b)        /* this block's effect settings from th
 }
 
 #if FM1B_CPU2
+static bd_job_t *bd_job_line;            /* its own line: core 2 never touches bd_t's hot lines. Not plat_cpu2_run's
+                                          * arg, which is a uint32_t: a pointer does not survive it on a 64-bit host */
 static void bd_job(uint32_t arg)         /* the second core: the hall on the last block's wet bus */
 {
-    bd_job_t *j = (bd_job_t *)(uintptr_t)arg;   /* its own line: core 2 never touches bd_t's hot lines */
+    bd_job_t *j = bd_job_line;
+    (void)arg;
     fx_hall(j->in_l, j->in_r, j->out_l, j->out_r, j->n, &j->p);
 }
 #endif
@@ -1338,7 +1341,8 @@ static void bd_block(bd_t *b, int32_t *lr, uint32_t n, float gain)
 #if FM1B_CPU2
     if (plat_cpu2_on()) {
         plat_cpu2_sync();
-        on_two = plat_cpu2_run(bd_job, (uint32_t)(uintptr_t)b->job) == 1;
+        bd_job_line = b->job;
+        on_two = plat_cpu2_run(bd_job, 0) == 1;
     }
 #endif
     for (i = 0; i < n; i++)
