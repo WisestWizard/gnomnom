@@ -1,4 +1,4 @@
-# GNOMNOM's build settings (fm1-base's tools/build.py: ../build.sh gnomnom)
+# GNOMNOM's build settings (fm1-base's tools/build.py: ../build.sh)
 name = "gnomnom"               # the build's files: gnomnom.fwsc, gnomnom-X.Y.fwsc
 id_prefix = "FM-1_15"          # package identity (each firmware its own): dev FM-1_1500, releases FM-1_15XXYYZZ.
                                # Check the Firmware Hub catalogue for a clash before the first public release.

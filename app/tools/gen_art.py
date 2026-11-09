@@ -4,7 +4,7 @@
 # GNOMNOM's palette and pixel art, kept here as text (one character a pixel, a legend a group) and written as the C
 # header ui.c includes (gn_art.h: GN_PAL, GN_DIM, GN_SPECIES_CAP and the sprites of docs/DESIGN.md section 3, every
 # index gn.h's GN_C_* / GN_PAL_* layout) plus a 4x contact sheet for review. Deterministic; Pillow only for the PNG.
-# Run by the build (fm1.toml gen) from gnomnom/: python3 tools/gen_art.py build/gen/gn_art.h build/gen/art.png
+# Run by the build (fm1.toml gen) from app/: python3 tools/gen_art.py build/gen/gn_art.h build/gen/art.png
 import colorsys, pathlib, sys
 
 SPECIES = ["PORCINI", "AGARIC", "DEATHCAP", "MOREL", "CHANTERELLE", "SHIITAKE", "MEANIE", "GIANT", "FROST", "PIXIE",

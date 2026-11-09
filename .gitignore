@@ -1,0 +1,4 @@
+app/build/
+app/web/words/*.json
+__pycache__/
+.DS_Store

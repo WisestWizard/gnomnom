@@ -37,7 +37,7 @@ you stash, and the LEDs under the keys show what is coming. MIDI in and out over
 
 ## 1. Install
 
-**From a terminal:** `python3 base/tools/fm1_install.py gnomnom/build/gnomnom.fwsc`, with the FM-1 connected by
+**From a terminal:** `python3 base/tools/fm1_install.py app/build/gnomnom.fwsc`, with the FM-1 connected by
 USB. Hold OCT− (or OCT− and OCT+ for five seconds) at power-on for update mode.
 
 **From the browser:** in Chrome or Edge, the installer page writes the same package; it can put M-VAVE's own
@@ -349,10 +349,10 @@ SAVE lights while something is unsaved.
 
 ## 16. The simulator and the emulator
 
-`./build.sh gnomnom --host` builds the host simulator; `gnomnom/build/host/gnomnom_host gnomnom/tests/basic.txt
-gnomnom/build/host` runs the test script (a run from the title to GAME OVER and back, JAM, the knobs, the screen
-reader, with screenshots in `gnomnom/build/host`); `gnomnom/tests/screens.txt` makes this manual's screenshots
-into `gnomnom/docs/img`. The run's seed is fixed, so a script plays out the same every time. Beside the platform's
+`./build.sh --host` builds the host simulator; `app/build/host/gnomnom_host app/tests/basic.txt
+app/build/host` runs the test script (a run from the title to GAME OVER and back, JAM, the knobs, the screen
+reader, with screenshots in `app/build/host`); `app/tests/screens.txt` makes this manual's screenshots
+into `app/docs/img`. The run's seed is fixed, so a script plays out the same every time. Beside the platform's
 own script commands (`wait`, `tap`, `tapkey`, `turn`, `expect` ...) GNOMNOM adds `gn auto N` (the autoplayer eats
 the next N mushrooms at their hit ticks; 999 for the lot), `gn autooff`, `gn demo 0|1` (the imperfect player),
 `gn stage N` (the title's start pick, 1 to 8, past the furthest reached) and `gn seed N` (the next run's seed), and
@@ -360,7 +360,7 @@ checks named state, section, stage, score, trip, triplevel, combo, hiscore, jam,
 ability, abilitybars, bosson, bossbites, auto, countin, stash0..2, mush, eaten, missed, poisoned, perfect, spawned,
 air, chains, chomps, clams, nexthit, nextlane, voices, peakN, peakout, furthest, hat, flash and dirty.
 
-`./build.sh gnomnom --web` builds the browser emulator into `gnomnom/build/emu/`: the same code, with sound,
+`./build.sh --web` builds the browser emulator into `app/build/emu/`: the same code, with sound,
 played with the mouse or the computer keyboard (qwertyui and asdfghjk are the white keys, the digits the black
 keys, P is PLAY, Escape HOME, Z and X the OCT buttons).
 

@@ -1,5 +1,5 @@
-# The manual's screenshots (gnomnom/docs/img): ./build.sh gnomnom --host, then
-#   gnomnom/build/host/gnomnom_host gnomnom/tests/screens.txt gnomnom/docs/img
+# The manual's screenshots (app/docs/img): ./build.sh --host, then
+#   app/build/host/gnomnom_host app/tests/screens.txt app/docs/img
 wait 700
 shot screen-title.png
 # stage 1 in its TUNE, the autoplayer eating (88 BPM: the two-bar INTRO is 5455 ms)

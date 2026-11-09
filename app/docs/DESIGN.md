@@ -535,16 +535,16 @@ finale has the busiest passage, the most death caps and the fastest tempo.
 - `fm1.toml`: name "gnomnom", id_prefix "FM-1_15", include ["engine"], o2 the engine units, cpu2 true,
   cpu2_fallback true, ble true, ble_central true, usb_audio_in true, gen ["tools/gen_art.py {gen}/gn_art.h
   {gen}/art.png"]. `app.h`: APP_SPLASH, APP_CANVAS_PX 240×32, FM1B_UAC_DEEP 1, APP_BIG_FONT FONT_M.
-- Host: `./build.sh gnomnom --host`, then `gnomnom/build/host/gnomnom_host gnomnom/tests/basic.txt
-  gnomnom/build/host`. Deterministic (the run's seed is fixed in the simulator). `app_expect` names: state,
+- Host: `./build.sh --host`, then `app/build/host/gnomnom_host app/tests/basic.txt
+  app/build/host`. Deterministic (the run's seed is fixed in the simulator). `app_expect` names: state,
   section, stage (0..7), round, score, trip, triplevel, combo, hiscore, jam, practice, bpm, bar, gnomelane,
   ability, abilitybars, bosson, bossbites, auto, countin, stash0..2, mush, eaten, missed, poisoned, perfect,
   spawned, air, chains, chomps, clams, nexthit, nextlane, voices, peakN (part N, PART_COUNT the drums), peakout,
   furthest, hat, flash, dirty. Host commands (prefix `gn`): `gn auto N`, `gn autooff`, `gn demo 0|1`, `gn stage N`
   (1..8 as printed: the title's pick, past the furthest reached), `gn seed N`.
-- Web: `./build.sh gnomnom --web`, served by `.claude/launch.json` "gnomnom-emu" on port 8766; the page's
+- Web: `./build.sh --web`, served by `.claude/launch.json` "gnomnom-emu" on port 8766; the page's
   keyboard (qwertyui / asdfghjk white keys, digits black keys, P = PLAY, Escape = HOME, Z/X = OCT) plays it.
-- Device: `./build.sh gnomnom` → `gnomnom/build/gnomnom.fwsc`. Flash only on Kyle's "Flash it".
+- Device: `./build.sh` → `app/build/gnomnom.fwsc`. Flash only on Kyle's "Flash it".
 - `tests/basic.txt`: boot → title; PLAY; the intro; `gn auto` and the score; a miss; pause and the count-in; JAM
   wobbles instead of ending; a run ends → OVER, settings saved, `reboot`, the high score survives; MIDI out of
   LEAD notes; peak_db_max −0.3 (the limiter holds); knobs. `tests/screens.txt` makes the manual's screenshots.

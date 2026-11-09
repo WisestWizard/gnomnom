@@ -7,16 +7,18 @@ strange along the way. The 27 keys are the controller (white keys by letter are 
 keys hold the power-ups), the LEDs under the keys cue the lanes, the trip meter is the life bar: let it run out
 and you come down.
 
-Built as a third app on fm1-base beside Pocket Poly (`../app`) and DEEP FIELD (`../deepfield`). The design and the
-module contracts: `docs/DESIGN.md`; the manual: `docs/MANUAL.md`.
+Built as an app on [fm1-base](https://github.com/charlesvestal/fm1-base), beside
+[Pocket Poly](https://github.com/WisestWizard/pocketpoly) and
+[DEEP FIELD](https://github.com/WisestWizard/deepfield), which it shared a repository with until
+2026-11-08. The design and the module contracts: `docs/DESIGN.md`; the manual: `docs/MANUAL.md`.
 
 ## Build, test, play
 
-    ./build.sh gnomnom --host
-    gnomnom/build/host/gnomnom_host gnomnom/tests/basic.txt gnomnom/build/host
-    ./build.sh gnomnom --web            # the browser emulator: gnomnom/build/emu/ (serve it; keys qwertyui asdfghjk, P = PLAY)
-    ./build.sh gnomnom                  # the device package: gnomnom/build/gnomnom.fwsc
-    python3 base/tools/fm1_install.py gnomnom/build/gnomnom.fwsc
+    ./build.sh --host
+    app/build/host/gnomnom_host app/tests/basic.txt app/build/host
+    ./build.sh --web            # the browser emulator: app/build/emu/ (serve it; keys qwertyui asdfghjk, P = PLAY)
+    ./build.sh                  # the device package: app/build/gnomnom.fwsc
+    python3 base/tools/fm1_install.py app/build/gnomnom.fwsc
 
 ## Licence
 

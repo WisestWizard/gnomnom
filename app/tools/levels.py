@@ -3,13 +3,13 @@
 # Copyright (C) 2026 Kyle McCann
 """Render each stage's intro and first bars under the autoplayer in the host simulator and print its levels: the
 output's peak and RMS over time (dBFS) and the band's per-part peaks the simulator reports, so the stages and the
-parts can be matched by ear and by number. Run from the repository after ./build.sh gnomnom --host.
-  python3 gnomnom/tools/levels.py            every stage, 16 bars of the tune each, into gnomnom/build/levels/
-  python3 gnomnom/tools/levels.py 4 8        stages 4 and 8 only"""
+parts can be matched by ear and by number. Run from the repository after ./build.sh --host.
+  python3 app/tools/levels.py            every stage, 16 bars of the tune each, into app/build/levels/
+  python3 app/tools/levels.py 4 8        stages 4 and 8 only"""
 import array, math, pathlib, subprocess, sys, wave
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
-HOST = ROOT / "gnomnom/build/host/gnomnom_host"
-OUT = ROOT / "gnomnom/build/levels"
+HOST = ROOT / "app/build/host/gnomnom_host"
+OUT = ROOT / "app/build/levels"
 BPM0 = [88, 112, 124, 128, 136, 138, 146, 158]       # the stage table's bpm0 (tunes.c); the wait is generous
 PARTS = ["lead", "bass", "stab", "drums", "", "out"]  # expect peakN: PART_LEAD, PART_BASS, PART_STAB, the drums, -, the output
 

@@ -1,5 +1,5 @@
-# GNOMNOM in the host simulator: ./build.sh gnomnom --host, then
-#   gnomnom/build/host/gnomnom_host gnomnom/tests/basic.txt gnomnom/build/host
+# GNOMNOM in the host simulator: ./build.sh --host, then
+#   app/build/host/gnomnom_host app/tests/basic.txt app/build/host
 # Stage 1 (index 0) is 88 BPM: a beat is 682 ms, a bar 2727 ms, the two-bar INTRO 5455 ms; the run's seed is fixed,
 # so every number below comes out the same each run. The whole script is about 100 s of simulated time.
 wait 700
