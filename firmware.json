@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "gnomnom",
+  "name": "Gnomnom",
+  "license": "MPL-2.0",
+  "tagline": "a gnome eats mushrooms and plays the tune: a rhythm game for the FM-1",
+  "hardware": {
+    "models": ["FM-1"],
+    "flash": ["856014", "B36014"],
+    "features": ["bluetooth-midi", "bluetooth-midi-devices", "usb-audio-in", "second-core", "screen-reader"]
+  },
+  "credits": "Built on fm1-base and felucca-bsp, from Felucca by Leo Kuroshita (Hügelton Instruments)."
+}
